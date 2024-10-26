@@ -1,2 +1,2 @@
-local M = require("slimetree")
+local M = require("nvim-slimetree.slimetree")
 return M
