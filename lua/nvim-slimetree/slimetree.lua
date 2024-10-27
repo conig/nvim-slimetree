@@ -463,6 +463,7 @@ end
 
 -- Function to create the gooTabs window with 4 panes
 function M.start_goo(commands)
+  _G.goo_started = true
   local window_name = "gooTabs"
  -- Retrieve the current session name
   local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
