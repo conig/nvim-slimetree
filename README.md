@@ -1,6 +1,6 @@
 # nvim-slimetree
 
-> [!ERROR] Under construction
+> [!INFO] Under construction
 > This plugin is in infancy and I'm going to change a lot of things. So expect things to break.
 
 nvim-slimetree has two main features:
