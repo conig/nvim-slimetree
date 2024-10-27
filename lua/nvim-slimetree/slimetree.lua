@@ -289,6 +289,11 @@ end
 
 -- Main function to perform the chunking and sending
 function M.goo_move()
+    if(_G.goo_started == false and _G.use_goo == true) then
+        vim.notify("Please start goo first", vim.log.levels.ERROR)
+        return
+    end
+
     -- Get the current buffer and cursor position
     local bufnr = vim.api.nvim_get_current_buf()
     local cursor = vim.api.nvim_win_get_cursor(0) -- {row, col}
@@ -463,7 +468,6 @@ end
 
 -- Function to create the gooTabs window with 4 panes
 function M.start_goo(commands)
-  _G.goo_started = true
   local window_name = "gooTabs"
  -- Retrieve the current session name
   local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
@@ -701,6 +705,7 @@ function M.summon_goo(n)
   -- Bring the specified pane into the current window to the right without changing focus
   local summon_cmd = string.format("tmux join-pane -h -d -s %s -t %s -l 30%%", pane_id, current_window)
   os.execute(summon_cmd)
+  _G.goo_started = true
   -- vim.notify(string.format("Summoned pane %d (%s) to window '%s' to the right.", n, pane_id, current_window), vim.log.levels.INFO)
 end
 

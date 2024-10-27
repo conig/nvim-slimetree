@@ -33,7 +33,7 @@ This will bring that terminal pane into your session, it will be returned to its
 
 ```{lua}
     keys = {
-      { "<leader>gs", function() require("nvim-slimetree").start_goo("r") end, desc = "Start goo", noremap = true, silent = true },
+      { "<leader>gs", function() require("nvim-slimetree").start_goo("clear && r") end, desc = "Start goo", noremap = true, silent = true },
       { "<leader>g1", function() require("nvim-slimetree").summon_goo(1) end, desc = "Summon goo 1", noremap = true, silent = true },
       { "<leader>g2", function() require("nvim-slimetree").summon_goo(2) end, desc = "Summon goo 2", noremap = true, silent = true },
       { "<leader>g3", function() require("nvim-slimetree").summon_goo(3) end, desc = "Summon goo 3", noremap = true, silent = true },
