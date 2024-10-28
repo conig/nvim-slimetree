@@ -289,12 +289,12 @@ end
 
 
 -- Main function to perform the chunking and sending
-function M.goo_move()
+function M.goo_move(hold_position)
     if(_G.goo_started == false and _G.use_goo == true) then
         vim.notify("Please start goo first", vim.log.levels.ERROR)
         return
     end
-
+    local hold_position = hold_position or false 
     -- Get the current buffer and cursor position
     local bufnr = vim.api.nvim_get_current_buf()
     local cursor = vim.api.nvim_win_get_cursor(0) -- {row, col}
@@ -436,6 +436,10 @@ function M.goo_move()
 
     -- Send the lines to vim-slime
     send_to_slime(bufnr, start_row, end_row)
+    
+    if hold_position == true then
+      return
+    end
 
     -- Move the cursor to the line below the end of the range
     local total_lines = vim.api.nvim_buf_line_count(bufnr)
