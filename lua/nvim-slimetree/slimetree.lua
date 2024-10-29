@@ -618,14 +618,7 @@ function M.end_goo()
     end
   end
 
-  -- Kill the gooTabs window
-  local kill_window_cmd = string.format("tmux kill-window -t %s:%s", session_name, window_name)
-  local kill_window_output = exec_cmd(kill_window_cmd)
-  if not kill_window_output then
-    -- vim.notify("Failed to kill window " .. window_name, vim.log.levels.ERROR)
-  end
-
-  -- Unset the environment variables
+    -- Unset the environment variables
   for i = 1, 4 do
     vim.fn.setenv(string.format("GOO_PANE_%d", i), nil)
   end
