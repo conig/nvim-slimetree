@@ -12,6 +12,7 @@ local ts_utils = require("nvim-treesitter.ts_utils")
 -- Define acceptable Tree-sitter node types for chunking
 local acceptable_node_types = {
     ["call"] = true,
+    ["string"] = true,
     ["function_definition"] = true,
     ["return_statement"] = true,
     ["table_constructor"] = true,
