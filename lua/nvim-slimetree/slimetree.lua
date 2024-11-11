@@ -37,6 +37,7 @@ local acceptable_node_types = {
 -- Define nodes to be skipped (e.g., comments, whitespace)
 local skip_nodes = {
     ["comment"] = true,
+    ["code_span_delimiter"] = true,
     ["fenced_code_block"] = true,
     ["fenced_code_block_delimiter"] = true,
     ["program"] = true,
