@@ -2,8 +2,6 @@
 local M = {}
 
 -- Issues
--- When there are multiple nodes blocks on the same line. Only assess the eligibility of the one with the largest width. Otherwise assignments won't be fully considered instead opting for their atomic constituents.
--- When there there are multiple eligble nodes that BEGIN on the same line, choose the one with the longest width. Otherwise full blocks will not be exceuted properly.
 
 --- EXPERIMENTAL CODE
 local treesitter = vim.treesitter
@@ -41,6 +39,7 @@ local skip_nodes = {
     ["comment"] = true,
     ["fenced_code_block"] = true,
     ["fenced_code_block_delimiter"] = true,
+    ["program"] = true,
     ["inline"] = true,
     ["minus_metadata"] = true,
     ["atx_h1_marker"] = true,
@@ -50,9 +49,44 @@ local skip_nodes = {
     ["atx_h5_marker"] = true,
     -- Add more node types to skip as needed
 }
+-- Start goo move code
+-- Utility function to check if a node is acceptable
+local function is_acceptable_node(node)
+    local node_type = node:type()
+    if acceptable_node_types[node_type] then
+        -- Check if any ancestor is of type 'argument' or 'call', but stop at 'program'
+        local parent = node:parent()
+        while parent and parent:type() ~= 'program' and parent:type() ~= 'chunk' and parent:type() ~= "braced_expression" do
+            if parent:type() == 'argument' or parent:type() == 'binary_operator' then
+                return false  -- Node is part of an argument, not acceptable
+            end
+            parent = parent:parent()
+        end
+        return true  -- Node is acceptable
+    else
+        return false  -- Node type is not acceptable
+    end
+end
 
+-- Utility function to check if a node type should be skipped
+local function is_skip_node(node_type)
+    return skip_nodes[node_type] or false
+end
+
+-- Function to traverse upwards and find the smallest acceptable node
+local function find_smallest_acceptable_node(node)
+    while node do
+        if is_acceptable_node(node) then
+            return node
+        end
+        node = node:parent()
+    end
+    return nil
+end
+
+-- Modified function to accept the tree as an argument and handle injections
 local function get_node_under_cursor(bufnr, row, col)
-      -- If 'bufnr' is not provided, use the current buffer
+    -- If 'bufnr' is not provided, use the current buffer
     bufnr = bufnr or vim.api.nvim_get_current_buf()
 
     -- If 'row' is not provided, get it from the current cursor position
@@ -85,13 +119,12 @@ local function get_node_under_cursor(bufnr, row, col)
 
     -- While not at the end of the line
     while col < line_length do
-        -- Retrieve node at current position
+        -- Retrieve node at current position, handling injections
         local node = vim.treesitter.get_node({
             bufnr = bufnr,
             pos = { row, col },
             ignore_injections = false,
         })
-
         if node then
             -- Get the start and end columns of the node
             local _, start_col_node, _, end_col_node = node:range()
@@ -137,90 +170,42 @@ local function get_node_under_cursor(bufnr, row, col)
     end
 
     if widest_node then
-        -- Print the node type and its column span
-        local _, start_col_node, _, end_col_node = widest_node:range()
-        -- vim.notify(string.format(
-        --     "Widest node type: %s (columns %d to %d, span %d)",
-        --     widest_node:type(), start_col_node, end_col_node, max_span
-        -- ))
-    else
-        -- vim.notify("No Tree-sitter nodes found on this row.", vim.log.levels.INFO)
-    end
-
-   if widest_node then
-    local current_node = widest_node
-    local parent = current_node:parent()
-    while parent and parent:type() ~= "program" and parent:type() ~= "chunk" do
-        local parent_start_row, _, _, _ = parent:range()
-        if parent_start_row == row then
-            current_node = parent
-            parent = current_node:parent()
-        else
-            break
+        local current_node = widest_node
+        local parent = current_node:parent()
+        while parent and parent:type() ~= "program" and parent:type() ~= "chunk" do
+            local parent_start_row, _, _, _ = parent:range()
+            if parent_start_row == row then
+                current_node = parent
+                parent = current_node:parent()
+            else
+                break
+            end
         end
+        return current_node
     end
-    return current_node
-  end
     -- Return the widest node if no suitable parent is found
     return widest_node
 end
 
--- Utility function to check if a node is acceptable
-local function is_acceptable_node(node)
-    local node_type = node:type()
-    if acceptable_node_types[node_type] then
-        -- Check if any ancestor is of type 'argument' or 'call', but stop at 'program'
-        local parent = node:parent()
-        while parent and parent:type() ~= 'program' and parent:type() ~= 'chunk' and parent:type() ~= "braced_expression" do
-            if parent:type() == 'argument' or parent:type() == 'binary_operator' then
-                return false  -- Node is part of an argument, not acceptable
-            end
-            -- if(parent:type() == 'binary_operator') then
-            --     return false
-            -- end
-            parent = parent:parent()
-        end
-        return true  -- Node is acceptable
-    else
-        return false  -- Node type is not acceptable
-    end
-end
-
--- Utility function to check if a node type should be skipped
-local function is_skip_node(node_type)
-    return skip_nodes[node_type] or false
-end
-
--- Function to traverse upwards and find the smallest acceptable node
-local function find_smallest_acceptable_node(node)
-    while node do
-        if is_acceptable_node(node) then
-            return node
-        end
-        node = node:parent()
-    end
-    return nil
-end
-
--- Function to find the next acceptable node below the current position
+-- Modified function to accept the tree as an argument and handle injections
 local function find_next_acceptable_node(bufnr, current_row, current_col)
-    local parser = vim.treesitter.get_parser(bufnr)
-    local tree = parser:parse()[1]
-    if not tree then return nil end
-
     -- Get the node under the cursor
-    local node = get_node_under_cursor(bufnr, current_row, current_col)
+    local node = vim.treesitter.get_node({
+        bufnr = bufnr,
+        pos = { current_row, current_col },
+        ignore_injections = false,
+    })
     if not node then return nil end
 
     -- Find the 'program' node that contains the cursor
     local root = node
-    while root and root:type() ~= 'program' do
+    while root and root:type() ~= 'program' and root:type() ~= 'chunk' do
         root = root:parent()
     end
 
     if not root then
-        -- If no 'program' node is found, default to the full tree root
-        root = tree:root()
+        -- If no 'program' node is found, default to the root of the injected language
+        root = ts_utils.get_root_for_node(node)
     end
 
     local found_nodes = {}
@@ -231,8 +216,6 @@ local function find_next_acceptable_node(bufnr, current_row, current_col)
         if is_skip_node(node:type()) then
             return
         end
-
-        local start_row, start_col, end_row, end_col = node:range()
 
         -- Check if the node is acceptable
         if is_acceptable_node(node) then
@@ -288,14 +271,13 @@ function M.SlimeCurrentLine()
     send_to_slime(bufnr, current_line, current_line)
 end
 
-
 -- Main function to perform the chunking and sending
 function M.goo_move(hold_position)
-    if(_G.goo_started == false and _G.use_goo == true) then
+    if (_G.goo_started == false and _G.use_goo == true) then
         vim.notify("Please start goo first", vim.log.levels.ERROR)
         return
     end
-    local hold_position = hold_position or false 
+    local hold_position = hold_position or false
     -- Get the current buffer and cursor position
     local bufnr = vim.api.nvim_get_current_buf()
     local cursor = vim.api.nvim_win_get_cursor(0) -- {row, col}
@@ -303,21 +285,21 @@ function M.goo_move(hold_position)
     local col = cursor[2]
     local last_line = vim.api.nvim_buf_line_count(bufnr) - 1
 
-     while row < last_line do
+    while row < last_line do
         local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1]
         local is_empty = line:match("^%s*$") ~= nil
-        
-        -- Get treesitter node at current position
+
+        -- Get treesitter node at current position, handling injections
         local node = vim.treesitter.get_node({
             bufnr = bufnr,
-            pos = {row, 0}
+            pos = { row, 0 },
+            ignore_injections = false,
         })
-        
         local node_type = node and node:type() or nil
         local should_skip = is_empty or (node_type and skip_nodes[node_type])
-        
+
         if not should_skip then
-            vim.api.nvim_win_set_cursor(0, {row + 1, cursor[2]})
+            vim.api.nvim_win_set_cursor(0, { row + 1, cursor[2] })
             break
         end
         row = row + 1
@@ -437,9 +419,9 @@ function M.goo_move(hold_position)
 
     -- Send the lines to vim-slime
     send_to_slime(bufnr, start_row, end_row)
-    
+
     if hold_position == true then
-      return
+        return
     end
 
     -- Move the cursor to the line below the end of the range
@@ -452,9 +434,7 @@ function M.goo_move(hold_position)
     end
 end
 
--- EXPERIMENTAL CODE END
-
--- 
+-- END goo move code
 -- Helper function to execute a shell command and return its output
 --
 local function exec_cmd(cmd)
