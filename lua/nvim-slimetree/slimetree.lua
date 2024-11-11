@@ -188,75 +188,60 @@ local function get_node_under_cursor(bufnr, row, col)
     return widest_node
 end
 
--- Modified function to accept the tree as an argument and handle injections
+-- Helper function to get the next node in source order
+local function get_next_node_in_source_order(node)
+    if not node then return nil end
+
+    -- If the node has children, go to the first child
+    if node:child_count() > 0 then
+        return node:child(0)
+    end
+
+    -- Else, traverse upwards to find the next sibling
+    while node do
+        local next_sibling = node:next_sibling()
+        if next_sibling then
+            return next_sibling
+        end
+        node = node:parent()
+    end
+
+    -- Reached the end of the tree
+    return nil
+end
+
+-- Optimized function to find the next acceptable node
 local function find_next_acceptable_node(bufnr, current_row, current_col)
-    -- Get the node under the cursor
+    -- Get the node at the current position
     local node = vim.treesitter.get_node({
         bufnr = bufnr,
         pos = { current_row, current_col },
         ignore_injections = false,
     })
+
     if not node then return nil end
 
-    -- Find the 'program' node that contains the cursor
-    local root = node
-    while root and root:type() ~= 'program' and root:type() ~= 'chunk' do
-        root = root:parent()
-    end
+    -- Move to the next node in source order
+    node = get_next_node_in_source_order(node)
 
-    if not root then
-        -- If no 'program' node is found, default to the root of the injected language
-        root = ts_utils.get_root_for_node(node)
-    end
-
-    local found_nodes = {}
-
-    -- Helper function to recursively gather all nodes
-    local function gather_nodes(node)
-        -- Skip nodes that should be skipped
-        if is_skip_node(node:type()) then
-            return
-        end
-
-        -- Check if the node is acceptable
-        if is_acceptable_node(node) then
-            table.insert(found_nodes, node)
-        end
-
-        -- Recursively gather all child nodes
-        for child in node:iter_children() do
-            gather_nodes(child)
-        end
-    end
-
-    -- Gather all nodes starting from the 'program' node
-    gather_nodes(root)
-
-    -- Filter nodes that are after the current cursor position
-    local filtered_nodes = {}
-    for _, node in ipairs(found_nodes) do
+    while node do
+        -- Get the starting position of the node
         local start_row, start_col = node:range()
 
         -- Ensure the node is after the current cursor position
-        if (start_row > current_row) or
-           (start_row == current_row and start_col > current_col) then
-            table.insert(filtered_nodes, node)
+        if (start_row > current_row) or (start_row == current_row and start_col > current_col) then
+            -- Check if the node is acceptable
+            if is_acceptable_node(node) then
+                return node
+            end
         end
+
+        -- Move to the next node in source order
+        node = get_next_node_in_source_order(node)
     end
 
-    -- Sort the filtered nodes by their starting position
-    table.sort(filtered_nodes, function(a, b)
-        local a_start_row, a_start_col = a:range()
-        local b_start_row, b_start_col = b:range()
-        if a_start_row == b_start_row then
-            return a_start_col < b_start_col
-        else
-            return a_start_row < b_start_row
-        end
-    end)
-
-    -- Return the closest acceptable node below
-    return filtered_nodes[1]
+    -- No acceptable node found
+    return nil
 end
 
 -- Function to send a range of lines to vim-slime
