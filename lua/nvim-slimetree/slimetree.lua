@@ -1,11 +1,5 @@
 local M = {}
 
--- Issues
-
---- EXPERIMENTAL CODE
-local treesitter = vim.treesitter
-local ts_utils = require("nvim-treesitter.ts_utils")
-
 -- Define acceptable Tree-sitter node types for chunking
 local acceptable_node_types = {
 	["call"] = true,
@@ -284,11 +278,7 @@ function M.goo_move(hold_position)
 		local is_empty = line:match("^%s*$") ~= nil
 
 		-- Get treesitter node at current position, handling injections
-		local node = vim.treesitter.get_node({
-			bufnr = bufnr,
-			pos = { row, 0 },
-			ignore_injections = false,
-		})
+    local node = get_node_under_cursor(bufnr, row, col)
 		local node_type = node and node:type() or nil
 		local should_skip = is_empty or (node_type and skip_nodes[node_type])
 
