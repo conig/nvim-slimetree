@@ -106,7 +106,7 @@ local function get_node_under_cursor(bufnr, row, col)
 	local lines = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)
 	local line = lines[1] or ""
 	if line == "" then
-		vim.notify("The specified row is empty.", vim.log.levels.INFO)
+		-- vim.notify("The specified row is empty.", vim.log.levels.INFO)
 		return nil
 	end
 
