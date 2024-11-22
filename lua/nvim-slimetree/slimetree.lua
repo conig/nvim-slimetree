@@ -278,7 +278,7 @@ function M.goo_move(hold_position)
 		local is_empty = line:match("^%s*$") ~= nil
 
 		-- Get treesitter node at current position, handling injections
-    local node = get_node_under_cursor(bufnr, row, col)
+		local node = get_node_under_cursor(bufnr, row, col)
 		local node_type = node and node:type() or nil
 		local should_skip = is_empty or (node_type and skip_nodes[node_type])
 
