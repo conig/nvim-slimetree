@@ -1,48 +1,9 @@
 local M = {}
 
 -- Define acceptable Tree-sitter node types for chunking
-local acceptable_node_types = {
-	["call"] = true,
-	["string"] = true,
-	["function_definition"] = true,
-	["return_statement"] = true,
-	["table_constructor"] = true,
-	["expression_list"] = true,
-	["assignment_statement"] = true,
-	["extract_operator"] = true,
-	["function_call"] = true,
-	["if_statement"] = true,
-	["for_statement"] = true,
-	["while_statement"] = true,
-	["braced_expression"] = true,
-	["expression_statement"] = true,
-	["binary_operator"] = true, -- Corrected from "binary_expression"
-	["unary_expression"] = true,
-	["literal"] = true,
-	["float"] = true,
-	["subset"] = true,
-	["identifier"] = true,
-	["local_declaration"] = true,
-	["repeat_statement"] = true,
-	-- Add more node types as needed for your language
-}
-
+local acceptable_node_types = require "nvim-slimetree.nodes.R.acceptable"
 -- Define nodes to be skipped (e.g., comments, whitespace)
-local skip_nodes = {
-	["comment"] = true,
-	["code_span_delimiter"] = true,
-	["fenced_code_block"] = true,
-	["fenced_code_block_delimiter"] = true,
-	["program"] = true,
-	["inline"] = true,
-	["minus_metadata"] = true,
-	["atx_h1_marker"] = true,
-	["atx_h2_marker"] = true,
-	["atx_h3_marker"] = true,
-	["atx_h4_marker"] = true,
-	["atx_h5_marker"] = true,
-	-- Add more node types to skip as needed
-}
+local skip_nodes = require "nvim-slimetree.nodes.R.skip"
 -- Start goo move code
 -- Utility function to check if a node is acceptable
 local function is_acceptable_node(node)
