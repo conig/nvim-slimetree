@@ -1,9 +1,9 @@
 local M = {}
 
 -- Define acceptable Tree-sitter node types for chunking
-local acceptable_node_types = require "nvim-slimetree.nodes.R.acceptable"
+local acceptable_node_types = require "nodes.R.acceptable"
 -- Define nodes to be skipped (e.g., comments, whitespace)
-local skip_nodes = require "nvim-slimetree.nodes.R.skip"
+local skip_nodes = require "nodes.R.skip"
 -- Start goo move code
 -- Utility function to check if a node is acceptable
 local function is_acceptable_node(node)
