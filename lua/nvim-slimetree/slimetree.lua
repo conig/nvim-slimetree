@@ -124,7 +124,10 @@ local function get_node_under_cursor(bufnr, row, col)
 		local _, start_col_node, _, end_col_node = n:range()
 		local span = end_col_node - start_col_node
     local node_type = n:type()
-		if span > max_span and not is_skip_node(node_type) then
+    if is_skip_node(node_type) then
+     span = 0
+    end
+		if span > max_span then
 			max_span = span
 			widest_node = n
 		end
