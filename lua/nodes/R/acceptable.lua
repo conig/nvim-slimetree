@@ -22,6 +22,7 @@ return {
 	["identifier"] = true,
 	["local_declaration"] = true,
 	["repeat_statement"] = true,
+  ["subset2"] = true,
 	-- Add more node types as needed for your language
 }
 

@@ -1,19 +1,21 @@
 local M = {}
-
+local get_nodes = require("nvim-slimetree.get_nodes")
 -- Define acceptable Tree-sitter node types for chunking
-local acceptable_node_types = require "nodes.R.acceptable"
+-- local acceptable_node_types = require "nodes.R.acceptable"
 -- Define nodes to be skipped (e.g., comments, whitespace)
 local skip_nodes = require "nodes.R.skip"
 -- Start goo move code
 -- Utility function to check if a node is acceptable
-local function is_acceptable_node(node)
+local function is_acceptable_node(node, node_types)
+  local acceptable_node_types = node_types.acceptable
+  local root_node = node_types.root
 	local node_type = node:type()
 	if acceptable_node_types[node_type] then
 		-- Check if any ancestor is of type 'argument' or 'call', but stop at 'program'
 		local parent = node:parent()
 		while
 			parent
-			and parent:type() ~= "program"
+			and parent:type() ~= root_node
 			and parent:type() ~= "chunk"
 			and parent:type() ~= "braced_expression"
 		do
@@ -34,9 +36,9 @@ local function is_skip_node(node_type)
 end
 
 -- Function to traverse upwards and find the smallest acceptable node
-local function find_smallest_acceptable_node(node)
+local function find_smallest_acceptable_node(node, node_types)
 	while node do
-		if is_acceptable_node(node) then
+		if is_acceptable_node(node, node_types) then
 			return node
 		end
 		node = node:parent()
@@ -45,7 +47,7 @@ local function find_smallest_acceptable_node(node)
 end
 
 -- Modified function to accept the tree as an argument and handle injections
-local function get_node_under_cursor(bufnr, row, col)
+local function get_node_under_cursor(bufnr, row)
 	-- If 'bufnr' is not provided, use the current buffer
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 
@@ -176,7 +178,7 @@ local function get_next_node_in_source_order(node)
 end
 
 -- Optimized function to find the next acceptable node
-local function find_next_acceptable_node(bufnr, current_row, current_col)
+local function find_next_acceptable_node(bufnr, current_row, current_col, node_types)
 	-- Get the node at the current position
 	local node = vim.treesitter.get_node({
 		bufnr = bufnr,
@@ -198,7 +200,7 @@ local function find_next_acceptable_node(bufnr, current_row, current_col)
 		-- Ensure the node is after the current cursor position
 		if (start_row > current_row) or (start_row == current_row and start_col > current_col) then
 			-- Check if the node is acceptable
-			if is_acceptable_node(node) then
+			if is_acceptable_node(node, node_types) then
 				return node
 			end
 		end
@@ -230,7 +232,7 @@ function M.goo_move(hold_position)
 		vim.notify("Please start goo first", vim.log.levels.ERROR)
 		return
 	end
-	local hold_position = hold_position or false
+	hold_position = hold_position or false
 	-- Get the current buffer and cursor position
 	local bufnr = vim.api.nvim_get_current_buf()
 	local cursor = vim.api.nvim_win_get_cursor(0) -- {row, col}
@@ -238,12 +240,15 @@ function M.goo_move(hold_position)
 	local col = cursor[2]
 	local last_line = vim.api.nvim_buf_line_count(bufnr) - 1
 
+  -- get nodes for bufnr
+  local node_types = get_nodes.get_nodes()
+
 	while row < last_line do
 		local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1]
 		local is_empty = line:match("^%s*$") ~= nil
 
 		-- Get treesitter node at current position, handling injections
-		local node = get_node_under_cursor(bufnr, row, col)
+		local node = get_node_under_cursor(bufnr, row)
 		local node_type = node and node:type() or nil
 		local should_skip = is_empty or (node_type and skip_nodes[node_type])
 
@@ -260,7 +265,7 @@ function M.goo_move(hold_position)
 	-- Check if the current line is entirely empty
 	local is_line_empty = current_line:match("^%s*$") ~= nil
 
-	local node = get_node_under_cursor(bufnr, row, col)
+	local node = get_node_under_cursor(bufnr, row)
 	if not node then
 		-- vim.notify("No Tree-sitter node found under the cursor.", vim.log.levels.WARN)
 		return
@@ -272,7 +277,7 @@ function M.goo_move(hold_position)
 
 	if is_line_empty or is_skip then
 		-- If the line is empty or a skip node, search for the next acceptable node below
-		local acceptable_node = find_next_acceptable_node(bufnr, row, col)
+		local acceptable_node = find_next_acceptable_node(bufnr, row, col, node_types)
 		if not acceptable_node then
 			-- vim.notify("No acceptable chunk found after the cursor.", vim.log.levels.INFO)
 			return
@@ -302,7 +307,7 @@ function M.goo_move(hold_position)
 			col = first_non_ws - 1 -- Update column position
 
 			-- Update the node after moving the cursor
-			node = get_node_under_cursor(bufnr, row, col)
+			node = get_node_under_cursor(bufnr, row)
 			if not node then
 				-- vim.notify("No Tree-sitter node found after moving cursor.", vim.log.levels.WARN)
 				return
@@ -312,7 +317,7 @@ function M.goo_move(hold_position)
 			is_skip = is_skip_node(node_type)
 			if is_skip then
 				-- If the new node is a skip node, treat it like an empty line
-				local acceptable_node = find_next_acceptable_node(bufnr, row, col)
+				local acceptable_node = find_next_acceptable_node(bufnr, row, col, node_types)
 				if not acceptable_node then
 					-- vim.notify("No acceptable chunk found after the cursor.", vim.log.levels.INFO)
 					return
@@ -340,14 +345,14 @@ function M.goo_move(hold_position)
 
 	-- At this point, the line is not empty and not a skip node
 	-- Find the smallest acceptable node starting from the current node
-	local acceptable_node = find_smallest_acceptable_node(node)
+	local acceptable_node = find_smallest_acceptable_node(node, node_types)
 
 	if acceptable_node then
 		-- Ensure that if the node starts after the cursor's column on the same line, we still consider it
 		local start_row, start_col, end_row, end_col = acceptable_node:range()
 		if start_row == row and start_col > col then
 			-- The acceptable node starts after the cursor's column, so treat it as the next acceptable node
-			acceptable_node = find_next_acceptable_node(bufnr, row, col)
+			acceptable_node = find_next_acceptable_node(bufnr, row, col, node_types)
 			if not acceptable_node then
 				-- vim.notify("No acceptable chunk found after the cursor.", vim.log.levels.INFO)
 				return
@@ -355,7 +360,7 @@ function M.goo_move(hold_position)
 		end
 	else
 		-- If current node isn't acceptable, search for the next acceptable node below
-		acceptable_node = find_next_acceptable_node(bufnr, row, col)
+		acceptable_node = find_next_acceptable_node(bufnr, row, col, node_types)
 		-- vim.notify("Found node type: " .. node_type)
 		if not acceptable_node then
 			-- vim.notify("No acceptable chunk found.", vim.log.levels.INFO)
