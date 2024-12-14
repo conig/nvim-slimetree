@@ -1,9 +1,5 @@
 local M = {}
 local get_nodes = require("nvim-slimetree.get_nodes")
--- Define acceptable Tree-sitter node types for chunking
--- local acceptable_node_types = require "nodes.R.acceptable"
--- Define nodes to be skipped (e.g., comments, whitespace)
-local skip_nodes = require "nodes.R.skip"
 -- Start goo move code
 -- Utility function to check if a node is acceptable
 local function is_acceptable_node(node, node_types)
@@ -31,8 +27,8 @@ local function is_acceptable_node(node, node_types)
 end
 
 -- Utility function to check if a node type should be skipped
-local function is_skip_node(node_type)
-	return skip_nodes[node_type] or false
+local function is_skip_node(node_type, node_types)
+	return node_types.skip[node_type] or false
 end
 
 -- Function to traverse upwards and find the smallest acceptable node
@@ -47,7 +43,7 @@ local function find_smallest_acceptable_node(node, node_types)
 end
 
 -- Modified function to accept the tree as an argument and handle injections
-local function get_node_under_cursor(bufnr, row)
+local function get_node_under_cursor(bufnr, row, node_types)
 	-- If 'bufnr' is not provided, use the current buffer
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 
@@ -126,7 +122,7 @@ local function get_node_under_cursor(bufnr, row)
 		local _, start_col_node, _, end_col_node = n:range()
 		local span = end_col_node - start_col_node
     local node_type = n:type()
-    if is_skip_node(node_type) then
+    if is_skip_node(node_type, node_types) then
      span = 0
     end
 		if span > max_span then
@@ -248,9 +244,9 @@ function M.goo_move(hold_position)
 		local is_empty = line:match("^%s*$") ~= nil
 
 		-- Get treesitter node at current position, handling injections
-		local node = get_node_under_cursor(bufnr, row)
+		local node = get_node_under_cursor(bufnr, row, node_types)
 		local node_type = node and node:type() or nil
-		local should_skip = is_empty or (node_type and skip_nodes[node_type])
+		local should_skip = is_empty or (node_type and node_types.skip[node_type])
 
 		if not should_skip then
 			vim.api.nvim_win_set_cursor(0, { row + 1, cursor[2] })
@@ -265,7 +261,7 @@ function M.goo_move(hold_position)
 	-- Check if the current line is entirely empty
 	local is_line_empty = current_line:match("^%s*$") ~= nil
 
-	local node = get_node_under_cursor(bufnr, row)
+	local node = get_node_under_cursor(bufnr, row, node_types)
 	if not node then
 		-- vim.notify("No Tree-sitter node found under the cursor.", vim.log.levels.WARN)
 		return
@@ -273,7 +269,7 @@ function M.goo_move(hold_position)
 
 	-- Check if the current node is a skip node (e.g., comment)
 	local node_type = node:type()
-	local is_skip = is_skip_node(node_type)
+	local is_skip = is_skip_node(node_type, node_types)
 
 	if is_line_empty or is_skip then
 		-- If the line is empty or a skip node, search for the next acceptable node below
@@ -307,14 +303,14 @@ function M.goo_move(hold_position)
 			col = first_non_ws - 1 -- Update column position
 
 			-- Update the node after moving the cursor
-			node = get_node_under_cursor(bufnr, row)
+			node = get_node_under_cursor(bufnr, row, node_types)
 			if not node then
 				-- vim.notify("No Tree-sitter node found after moving cursor.", vim.log.levels.WARN)
 				return
 			end
 
 			node_type = node:type()
-			is_skip = is_skip_node(node_type)
+			is_skip = is_skip_node(node_type, node_types)
 			if is_skip then
 				-- If the new node is a skip node, treat it like an empty line
 				local acceptable_node = find_next_acceptable_node(bufnr, row, col, node_types)
