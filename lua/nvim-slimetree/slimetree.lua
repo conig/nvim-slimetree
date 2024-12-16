@@ -1,22 +1,20 @@
 local M = {}
 local get_nodes = require("nvim-slimetree.get_nodes")
+local utils = require("nvim-slimetree.utils")
 -- Start goo move code
 -- Utility function to check if a node is acceptable
 local function is_acceptable_node(node, node_types)
-  local acceptable_node_types = node_types.acceptable
-  local root_node = node_types.root
+	local acceptable_node_types = node_types.acceptable
 	local node_type = node:type()
+	local roots = utils.append(node_types.root, node_types.sub_roots)
 	if acceptable_node_types[node_type] then
 		-- Check if any ancestor is of type 'argument' or 'call', but stop at 'program'
 		local parent = node:parent()
-		while
-			parent
-			and parent:type() ~= root_node
-			and parent:type() ~= "chunk"
-			and parent:type() ~= "braced_expression"
-		do
-			if parent:type() == "argument" or parent:type() == "binary_operator" then
-				return false -- Node is part of an argument, not acceptable
+    -- don't look up the tree if you reach a node with a bad parent
+		while parent and not utils.in_set(parent:type(), roots) do
+      -- if parents imply node is part of a broader expression, return false
+			if utils.in_set(parent:type(), node_types.bad_parents) then
+				return false
 			end
 			parent = parent:parent()
 		end
@@ -121,10 +119,10 @@ local function get_node_under_cursor(bufnr, row, node_types)
 	for _, n in ipairs(row_nodes) do
 		local _, start_col_node, _, end_col_node = n:range()
 		local span = end_col_node - start_col_node
-    local node_type = n:type()
-    if is_skip_node(node_type, node_types) then
-     span = 0
-    end
+		local node_type = n:type()
+		if is_skip_node(node_type, node_types) then
+			span = 0
+		end
 		if span > max_span then
 			max_span = span
 			widest_node = n
@@ -236,8 +234,8 @@ function M.goo_move(hold_position)
 	local col = cursor[2]
 	local last_line = vim.api.nvim_buf_line_count(bufnr) - 1
 
-  -- get nodes for bufnr
-  local node_types = get_nodes.get_nodes()
+	-- get nodes for bufnr
+	local node_types = get_nodes.get_nodes()
 
 	while row < last_line do
 		local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1]

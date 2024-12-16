@@ -7,6 +7,8 @@ M.get_nodes = function()
     out.acceptable = require("nodes.R.acceptable")
     out.skip = require("nodes.R.skip")
     out.root = require("nodes.R.root")
+    out.sub_roots = require("nodes.R.sub_root")
+    out.bad_parents = require("nodes.R.bad_parents")
   end
   -- vim.notify(vim.inspect(out), "info", {title = "Nodes"})
   return out
