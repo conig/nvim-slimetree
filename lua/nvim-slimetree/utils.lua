@@ -1,4 +1,4 @@
-M = {}
+local M = {}
 -- logical test of whether x is container in y
 function M.in_set(x, y)
 	if type(y) ~= "table" then
