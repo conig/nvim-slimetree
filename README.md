@@ -4,10 +4,11 @@
 > This plugin is in infancy and I'm going to change a lot of things. So expect things to break.
 
 nvim-slimetree has two main features:
+
 1. Intelligent Treesitter based code exection in a REPL
 2. Management of multiple REPLs via tmux
 
- The objective of nvim-slimetree is to allow chunks of complete code to be executed based on cursor position and the treesitter syntax tree.
+The objective of nvim-slimetree is to allow chunks of complete code to be executed based on cursor position and the treesitter syntax tree.
 By doing so, users can swiftly jump through their codebase, without having to manually select whether lines or paragraphs of code should be executed.
 
 ## Code execution
@@ -32,52 +33,71 @@ Then, to summon each of four terminals execute summon_goo(n), where n is the ter
 This will bring that terminal pane into your session, it will be returned to its origin when you summon another terminal.
 
 ```{lua}
-    keys = {
-      { "<leader>gs", function() require("nvim-slimetree").start_goo("clear && r") end, desc = "Start goo", noremap = true, silent = true },
-      { "<leader>g1", function() require("nvim-slimetree").summon_goo(1) end, desc = "Summon goo 1", noremap = true, silent = true },
-      { "<leader>g2", function() require("nvim-slimetree").summon_goo(2) end, desc = "Summon goo 2", noremap = true, silent = true },
-      { "<leader>g3", function() require("nvim-slimetree").summon_goo(3) end, desc = "Summon goo 3", noremap = true, silent = true },
-      { "<leader>g4", function() require("nvim-slimetree").summon_goo(4) end, desc = "Summon goo 4", noremap = true, silent = true },
-    }
-```
-## Example installation and configuration
 
+local st = require("nvim-slimetree")
+
+vim.keymap.set("n", "<leader>gs", function()
+    st.gootabs.start_goo "clear && r"
+end, { desc = "Start goo", noremap = true, silent = true })
+
+vim.keymap.set("n", "<leader>g1", function()
+    st.gootabs.summon_goo(1)
+end, { desc = "Summon goo 1", noremap = true, silent = true })
+
+vim.keymap.set("n", "<leader>g2", function()
+    st.gootabs.summon_goo(2)
+end, { desc = "Summon goo 2", noremap = true, silent = true })
+
+vim.keymap.set("n", "<leader>g3", function()
+    st.gootabs.summon_goo(3)
+end, { desc = "Summon goo 3", noremap = true, silent = true })
+
+vim.keymap.set("n", "<leader>g4", function()
+    st.gootabs.summon_goo(4)
+end, { desc = "Summon goo 4", noremap = true, silent = true })
+```
+
+## Example installation and configuration
 
 ```{lua}
 
 return {
-  {
-    "jpalardy/vim-slime",
-    ft = { "python", "lua", "zsh", "bash", "rmd", "r", "quarto" },
-    config = function()
-      -- Configure vim-slime settings here
-      vim.g.slime_no_mappings = 1
-      vim.g.slime_target = "tmux"
-      vim.g.slime_default_config = {
-        socket_name = "default",
-        target_pane = 1,
-      }
-      vim.g.slime_dont_ask_default = 1
-      vim.g.slime_bracketed_paste = 1 -- Optional: enable bracketed-paste
-    end,
-  },
-  {
+{
     "conig/nvim-slimetree",
-    ft = { "markdown", "r", "rmd", "quarto", "lua" },
+    ft = { "r", "rmd", "quarto", "lua" },
     dependencies = "jpalardy/vim-slime",
-    dev = true,
-    dir = "/home/conig/repos/nvim-slimetree/",
-    keys = {
-      -- Slime key mappings
-      { "<CR>", "<Plug>SlimeRegionSend", mode = "x", remap = true, silent = true },
-      { "<CR>", function() require("nvim-slimetree").goo_move() end, desc = "Slime and move" },
-      { "<C-c><C-c>", function() require("nvim-slimetree").SlimeCurrentLine() end, desc = "Send current line to Slime" },
-      { "<leader>gs", function() require("nvim-slimetree").start_goo("r") end, desc = "Start goo", noremap = true, silent = true },
-      { "<leader>g1", function() require("nvim-slimetree").summon_goo(1) end, desc = "Summon goo 1", noremap = true, silent = true },
-      { "<leader>g2", function() require("nvim-slimetree").summon_goo(2) end, desc = "Summon goo 2", noremap = true, silent = true },
-      { "<leader>g3", function() require("nvim-slimetree").summon_goo(3) end, desc = "Summon goo 3", noremap = true, silent = true },
-      { "<leader>g4", function() require("nvim-slimetree").summon_goo(4) end, desc = "Summon goo 4", noremap = true, silent = true },
-   },
-}
+    config = function()
+      local st = require "nvim-slimetree"
+
+      -- Keymaps for .slimetree
+      vim.keymap.set("x", "<CR>", "<Plug>SlimeRegionSend", { remap = true, silent = true })
+      vim.keymap.set("n", "<CR>", function()
+        st.slimetree.goo_move()
+      end, { desc = "Slime and move" })
+      vim.keymap.set("n", "<leader><CR>", function()
+        st.slimetree.goo_move(true)
+      end, { desc = "Slime and hold position", noremap = true })
+      vim.keymap.set("n", "<C-c><C-c>", function()
+        st.slimetree.SlimeCurrentLine()
+      end, { desc = "Send current line to Slime" })
+
+      -- Keymaps for .gootabs
+      vim.keymap.set("n", "<leader>gs", function()
+        st.gootabs.start_goo "clear && r"
+      end, { desc = "Start goo", noremap = true, silent = true })
+      vim.keymap.set("n", "<leader>g1", function()
+        st.gootabs.summon_goo(1)
+      end, { desc = "Summon goo 1", noremap = true, silent = true })
+      vim.keymap.set("n", "<leader>g2", function()
+        st.gootabs.summon_goo(2)
+      end, { desc = "Summon goo 2", noremap = true, silent = true })
+      vim.keymap.set("n", "<leader>g3", function()
+        st.gootabs.summon_goo(3)
+      end, { desc = "Summon goo 3", noremap = true, silent = true })
+      vim.keymap.set("n", "<leader>g4", function()
+        st.gootabs.summon_goo(4)
+      end, { desc = "Summon goo 4", noremap = true, silent = true })
+    end,
+  }}
 
 ```
