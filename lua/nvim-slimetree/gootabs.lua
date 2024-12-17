@@ -16,8 +16,8 @@ local function escape_lua_pattern(s)
 end
 
 -- Function to create the gooTabs window with 4 panes
-function M.start_goo(commands)
-	local window_name = "gooTabs"
+function M.start_goo(commands, window_name)
+	window_name = window_name or "gooTabs"
 	-- Retrieve the current session name
 	local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
 	if not session_name or session_name == "" then
@@ -91,7 +91,7 @@ function M.start_goo(commands)
 
 	-- Store pane IDs in environment variables
 	for i, pane_id in ipairs(pane_ids) do
-		vim.fn.setenv(string.format("GOO_PANE_%d", i), pane_id)
+		vim.fn.setenv(string.format("%s_%d", window_name, i), pane_id)
 	end
 
 	-- Send commands to panes
@@ -136,16 +136,13 @@ local function pane_exists(pane_id)
 end
 
 -- Function to end goo session by killing panes and the gooTabs window
-function M.end_goo()
-	local window_name = "gooTabs"
-
-	-- Retrieve the current session name
-	local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
+function M.end_goo(window_name)
+	window_name = window_name or "gooTabs"
 
 	-- Retrieve pane IDs from environment variables
 	local pane_ids = {}
 	for i = 1, 4 do
-		local pane_id = vim.fn.getenv(string.format("GOO_PANE_%d", i))
+		local pane_id = vim.fn.getenv(string.format("%s_%d",window_name, i))
 		if pane_id and pane_id ~= "" then
 			table.insert(pane_ids, pane_id)
 		end
@@ -164,10 +161,10 @@ function M.end_goo()
 
 	-- Unset the environment variables
 	for i = 1, 4 do
-		vim.fn.setenv(string.format("GOO_PANE_%d", i), nil)
+		vim.fn.setenv(string.format("%s_%d", window_name, i), nil)
 	end
 
-	vim.notify("All goo panes and the 'gooTabs' window have been closed.", vim.log.levels.INFO)
+	vim.notify("All goo panes and the '" .. window_name .. "' window have been closed.", vim.log.levels.INFO)
 end
 
 -- Function to summon a specific goo pane into the current window
@@ -182,14 +179,15 @@ local function get_pane_window(pane_id)
 end
 
 -- Function to summon a specific goo pane into the current window
-function M.summon_goo(n)
+function M.summon_goo(n, window_name)
+  window_name = window_name or "gooTabs"
 	-- Ensure 'n' is between 1 and 4
 	if type(n) ~= "number" or n < 1 or n > 4 then
 		vim.notify("Please provide a pane number between 1 and 4.", vim.log.levels.ERROR)
 		return
 	end
 
-	local pane_id = vim.fn.getenv(string.format("GOO_PANE_%d", n))
+	local pane_id = vim.fn.getenv(string.format("%s_%d", window_name, n))
 	if not pane_id or pane_id == "" then
 		vim.notify("Pane ID not found. Make sure to run :StartGoo first.", vim.log.levels.ERROR)
 		return
@@ -204,7 +202,7 @@ function M.summon_goo(n)
 	current_window = current_window:gsub("%s+", "") -- Trim whitespace
 
 	-- Prevent moving panes within the gooTabs window
-	if current_window == "gooTabs" then
+	if current_window == window_name then
 		vim.notify("Cannot summon panes within the 'gooTabs' window.", vim.log.levels.WARN)
 		return
 	end
@@ -212,16 +210,16 @@ function M.summon_goo(n)
 	-- Move all goo panes back to 'gooTabs' (except those already there)
 	local panes_moved_back = false
 	for i = 1, 4 do
-		local pid = vim.fn.getenv(string.format("GOO_PANE_%d", i))
+		local pid = vim.fn.getenv(string.format("%s_%d", window_name, i))
 		if pid and pid ~= "" then
 			-- Get the window name of the pane
 			local pane_window = get_pane_window(pid)
-			if pane_window and pane_window ~= "gooTabs" then
+			if pane_window and pane_window ~= window_name then
 				-- Move the pane back to 'gooTabs' without changing focus
-				local move_cmd = string.format("tmux move-pane -d -s %s -t gooTabs", pid)
+				local move_cmd = string.format("tmux move-pane -d -s %s -t " .. window_name .. "", pid)
 				local move_output = exec_cmd(move_cmd)
 				if move_output == nil then
-					vim.notify(string.format("Failed to move pane %s back to 'gooTabs'.", pid), vim.log.levels.ERROR)
+					vim.notify(string.format("Failed to move pane %s back to " .. window_name .. "'.", pid), vim.log.levels.ERROR)
 				else
 					-- vim.notify(string.format("Moved pane %s back to 'gooTabs'.", pid), vim.log.levels.INFO)
 					panes_moved_back = true
@@ -232,7 +230,7 @@ function M.summon_goo(n)
 
 	-- Reset the layout in 'gooTabs' if any panes were moved back
 	if panes_moved_back then
-		local layout_cmd = "tmux select-layout -t gooTabs even-horizontal"
+		local layout_cmd = "tmux select-layout -t " .. window_name .. " even-horizontal"
 		exec_cmd(layout_cmd)
 		-- vim.notify("Reset 'gooTabs' layout to even-horizontal.", vim.log.levels.INFO)
 	end
