@@ -243,7 +243,7 @@ function M.summon_goo(n, window_name)
 	end
 
 	-- Bring the specified pane into the current window to the right without changing focus
-	local summon_cmd = string.format("tmux join-pane -h -d -s %s -t %s -l 30%%", pane_id, current_window)
+	local summon_cmd = string.format("tmux join-pane -h -d -s %s -t %s -l 33%%", pane_id, current_window)
 	os.execute(summon_cmd)
 	_G.goo_started = true
 	-- vim.notify(string.format("Summoned pane %d (%s) to window '%s' to the right.", n, pane_id, current_window), vim.log.levels.INFO)

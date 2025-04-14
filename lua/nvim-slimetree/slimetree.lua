@@ -29,6 +29,10 @@ local function is_skip_node(node_type, node_types)
 	return node_types.skip[node_type] or false
 end
 
+local function is_root_node(node_type, node_types)
+  return node_types.root[node_type] or false
+end
+
 -- Function to traverse upwards and find the smallest acceptable node
 local function find_smallest_acceptable_node(node, node_types)
 	while node do
@@ -86,7 +90,7 @@ local function get_node_under_cursor(bufnr, row, node_types)
 			local _, start_col_node, _, end_col_node = node:range()
 
 			-- Ensure the node starts on the specified row and at the current column
-			if start_col_node == col then
+			if start_col_node <= col then
 				table.insert(row_nodes, node)
 
 				-- Move to the end column of the current node
@@ -132,7 +136,7 @@ local function get_node_under_cursor(bufnr, row, node_types)
 	if widest_node then
 		local current_node = widest_node
 		local parent = current_node:parent()
-		while parent and parent:type() ~= "program" and parent:type() ~= "chunk" do
+		while parent and not is_root_node(parent:type(), node_types) and not parent:type() ~= "chunk" do
 			local parent_start_row, _, _, _ = parent:range()
 			if parent_start_row == row then
 				current_node = parent
