@@ -16,14 +16,17 @@ local function escape_lua_pattern(s)
 end
 
 -- Function to create the gooTabs window with 4 panes
-function M.start_goo(commands, window_name)
-	window_name = window_name or "gooTabs"
-	-- Retrieve the current session name
-	local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
-	if not session_name or session_name == "" then
-		vim.notify("Failed to retrieve tmux session name.", vim.log.levels.ERROR)
-		return {}
-	end
+function M.start_goo(commands, window_name, async)
+       window_name = window_name or "gooTabs"
+       if async == nil then
+               async = true
+       end
+       -- Retrieve the current session name
+       local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
+       if not session_name or session_name == "" then
+               vim.notify("Failed to retrieve tmux session name.", vim.log.levels.ERROR)
+               return {}
+       end
 
 	-- escape spaces in session name if present so tmux can interpret it as a single  argument
 	session_name = session_name:gsub(" ", "\\ ")
@@ -57,67 +60,121 @@ function M.start_goo(commands, window_name)
 		return {}
 	end
 
-	-- Split the initial pane vertically 3 times to create 4 vertical panes
-	local initial_pane = string.format("%s:%s.0", session_name, window_name)
+       -- Get the pane id of the initial pane so we can start using it immediately
+       local first_pane_output = exec_cmd(string.format("tmux list-panes -t %s:%s -F '#{pane_id}'", session_name, window_name))
+       if not first_pane_output or first_pane_output == "" then
+               vim.notify("Failed to retrieve pane ID for initial pane.", vim.log.levels.ERROR)
+               return {}
+       end
 
-	for i = 1, 3 do
-		local split_cmd = string.format("tmux split-window -h -t %s", initial_pane)
-		local split_output = exec_cmd(split_cmd)
-		if not split_output then
-			vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
-			return {}
-		end
-		-- Optional: brief sleep to allow tmux to process the split
-		vim.cmd("sleep 50ms")
-	end
+       local first_pane_id = first_pane_output:match("[^\r\n]+")
+       vim.fn.setenv(string.format("%s_1", window_name), first_pane_id)
 
-	-- Retrieve pane IDs
-	local panes_output = exec_cmd(string.format("tmux list-panes -t %s:%s -F '#{pane_id}'", session_name, window_name))
-	if not panes_output or panes_output == "" then
-		vim.notify("Failed to retrieve pane IDs.", vim.log.levels.ERROR)
-		return {}
-	end
+       local function pane_cmd(idx)
+               if not commands then
+                       return ""
+               end
+               if type(commands) == "table" then
+                       return commands[idx] or ""
+               else
+                       return commands
+               end
+       end
 
-	local pane_ids = {}
-	for pane_id in panes_output:gmatch("[^\r\n]+") do
-		table.insert(pane_ids, pane_id)
-	end
+       -- Start command in the first pane immediately
+       local first_cmd = pane_cmd(1)
+       if first_cmd ~= "" then
+               exec_cmd(string.format("tmux send-keys -t %s '%s' Enter", first_pane_id, first_cmd))
+       end
 
-	-- Ensure we have exactly 4 panes
-	if #pane_ids ~= 4 then
-		vim.notify(string.format("Expected 4 panes, but found %d panes.", #pane_ids), vim.log.levels.ERROR)
-		return {}
-	end
+       if not async then
+               -- Original synchronous behaviour
+               local initial_pane = string.format("%s:%s.0", session_name, window_name)
+               for i = 1, 3 do
+                       local split_cmd = string.format("tmux split-window -h -t %s", initial_pane)
+                       local split_output = exec_cmd(split_cmd)
+                       if not split_output then
+                               vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
+                               return {}
+                       end
+               end
 
-	-- Store pane IDs in environment variables
-	for i, pane_id in ipairs(pane_ids) do
-		vim.fn.setenv(string.format("%s_%d", window_name, i), pane_id)
-	end
+               local panes_output = exec_cmd(string.format("tmux list-panes -t %s:%s -F '#{pane_id}'", session_name, window_name))
+               if not panes_output or panes_output == "" then
+                       vim.notify("Failed to retrieve pane IDs.", vim.log.levels.ERROR)
+                       return {}
+               end
 
-	-- Send commands to panes
-	for i, pane_id in ipairs(pane_ids) do
-		local cmd_to_run = nil
-		if commands then
-			if type(commands) == "table" then
-				cmd_to_run = commands[i] or ""
-			else
-				cmd_to_run = commands
-			end
-		else
-			cmd_to_run = "" -- No command, or default command
-		end
+               local pane_ids = {}
+               for pane_id in panes_output:gmatch("[^\r\n]+") do
+                       table.insert(pane_ids, pane_id)
+               end
 
-		if cmd_to_run and cmd_to_run ~= "" then
-			local send_cmd = string.format("tmux send-keys -t %s '%s' Enter", pane_id, cmd_to_run)
-			local send_output = exec_cmd(send_cmd)
-			if not send_output then
-				vim.notify("Failed to send command to pane with command: " .. send_cmd, vim.log.levels.ERROR)
-			end
-		end
-	end
+               if #pane_ids ~= 4 then
+                       vim.notify(string.format("Expected 4 panes, but found %d panes.", #pane_ids), vim.log.levels.ERROR)
+                       return {}
+               end
 
-	-- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
-	return pane_ids
+               for i, pane_id in ipairs(pane_ids) do
+                       vim.fn.setenv(string.format("%s_%d", window_name, i), pane_id)
+                       local cmd = pane_cmd(i)
+                       if cmd ~= "" then
+                               exec_cmd(string.format("tmux send-keys -t %s '%s' Enter", pane_id, cmd))
+                       end
+               end
+
+               return pane_ids
+       end
+
+       -- Asynchronous creation of backup panes
+       local initial_pane = string.format("%s:%s.0", session_name, window_name)
+       local script_parts = {}
+       for _ = 1, 3 do
+               table.insert(script_parts, string.format("tmux split-window -h -t %s", initial_pane))
+       end
+       table.insert(script_parts, string.format("tmux list-panes -t %s:%s -F '#{pane_id}'", session_name, window_name))
+       local script = table.concat(script_parts, '; ')
+
+       local output_lines = {}
+       vim.fn.jobstart({ 'sh', '-c', script }, {
+               stdout_buffered = true,
+               on_stdout = function(_, data)
+                       if data then
+                               for _, line in ipairs(data) do
+                                       if line ~= '' then
+                                               table.insert(output_lines, line)
+                                       end
+                               end
+                       end
+               end,
+               on_exit = function(_, code)
+                       if code ~= 0 then
+                               vim.schedule(function()
+                                       vim.notify('Async pane creation failed', vim.log.levels.ERROR)
+                               end)
+                               return
+                       end
+
+                       if #output_lines ~= 4 then
+                               vim.schedule(function()
+                                       vim.notify('Failed to retrieve all pane IDs asynchronously', vim.log.levels.ERROR)
+                               end)
+                               return
+                       end
+
+                       for i, pane_id in ipairs(output_lines) do
+                               vim.fn.setenv(string.format('%s_%d', window_name, i), pane_id)
+                               if i > 1 then
+                                       local cmd = pane_cmd(i)
+                                       if cmd ~= '' then
+                                               exec_cmd(string.format("tmux send-keys -t %s '%s' Enter", pane_id, cmd))
+                                       end
+                               end
+                       end
+               end
+       })
+
+       return { first_pane_id }
 end
 
 -- Function to check if a pane exists
