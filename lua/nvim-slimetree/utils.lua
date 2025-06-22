@@ -1,10 +1,9 @@
 local M = {}
 -- logical test of whether x is container in y
 function M.in_set(x, y)
-	if type(y) ~= "table" then
-    print(y)
-		error("Expected a table as the second argument, got " .. type(y))
-	end
+        if type(y) ~= "table" then
+                error("Expected a table as the second argument, got " .. type(y))
+        end
 	-- If treating y as a set:
 	return y[x] == true
 end
