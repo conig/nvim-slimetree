@@ -2,14 +2,25 @@ M = {}
 
 M.get_nodes = function()
   local out = {}
-  -- if filetype in set r, rmd, qmd
-  if vim.bo.filetype == "r" or vim.bo.filetype == "rmd" or vim.bo.filetype == "qmd" then
-    out.acceptable = require("nodes.R.acceptable")
-    out.skip = require("nodes.R.skip")
-    out.root = require("nodes.R.root")
-    out.sub_roots = require("nodes.R.sub_root")
-    out.bad_parents = require("nodes.R.bad_parents")
+
+  -- determine the language directory for node definitions
+  local ft = vim.bo.filetype
+  local lang_map = { rmd = "R", qmd = "R" }
+  local lang_dir = lang_map[ft] or ft
+
+  local ok, nodes = pcall(require, string.format("nodes.%s.acceptable", lang_dir))
+  if ok then
+    out.acceptable = nodes
+    ok, nodes = pcall(require, string.format("nodes.%s.skip", lang_dir))
+    out.skip = ok and nodes or {}
+    ok, nodes = pcall(require, string.format("nodes.%s.root", lang_dir))
+    out.root = ok and nodes or {}
+    ok, nodes = pcall(require, string.format("nodes.%s.sub_root", lang_dir))
+    out.sub_roots = ok and nodes or {}
+    ok, nodes = pcall(require, string.format("nodes.%s.bad_parents", lang_dir))
+    out.bad_parents = ok and nodes or {}
   end
+
   -- vim.notify(vim.inspect(out), "info", {title = "Nodes"})
   return out
 end
