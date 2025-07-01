@@ -57,31 +57,25 @@ function M.start_goo(commands, window_name)
 		return {}
 	end
 
-	-- Split the initial pane vertically 3 times to create 4 vertical panes
-	local initial_pane = string.format("%s:%s.0", session_name, window_name)
+        -- Split the initial pane vertically 3 times to create 4 vertical panes
+        local initial_pane = string.format("%s:%s.0", session_name, window_name)
 
-	for i = 1, 3 do
-		local split_cmd = string.format("tmux split-window -h -t %s", initial_pane)
-		local split_output = exec_cmd(split_cmd)
-		if not split_output then
-			vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
-			return {}
-		end
-		-- Optional: brief sleep to allow tmux to process the split
-		vim.cmd("sleep 50ms")
-	end
+        local pane_ids = { initial_pane }
 
-	-- Retrieve pane IDs
-	local panes_output = exec_cmd(string.format("tmux list-panes -t %s:%s -F '#{pane_id}'", session_name, window_name))
-	if not panes_output or panes_output == "" then
-		vim.notify("Failed to retrieve pane IDs.", vim.log.levels.ERROR)
-		return {}
-	end
+        for _ = 1, 3 do
+                local split_cmd = string.format("tmux split-window -h -P -F '#{pane_id}' -t %s", initial_pane)
+                local split_output = exec_cmd(split_cmd)
+                if not split_output then
+                        vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
+                        return {}
+                end
+                local new_pane = split_output:gsub("%s+", "")
+                table.insert(pane_ids, new_pane)
+        end
 
-	local pane_ids = {}
-	for pane_id in panes_output:gmatch("[^\r\n]+") do
-		table.insert(pane_ids, pane_id)
-	end
+        -- Reset layout to even-horizontal
+        local layout_cmd = string.format("tmux select-layout -t %s:%s even-horizontal", session_name, window_name)
+        exec_cmd(layout_cmd)
 
 	-- Ensure we have exactly 4 panes
 	if #pane_ids ~= 4 then
