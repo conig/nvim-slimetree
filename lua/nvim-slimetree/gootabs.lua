@@ -16,14 +16,16 @@ local function escape_lua_pattern(s)
 end
 
 -- Function to create the gooTabs window with 4 panes
-function M.start_goo(commands, window_name)
-	window_name = window_name or "gooTabs"
-	-- Retrieve the current session name
-	local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
-	if not session_name or session_name == "" then
-		vim.notify("Failed to retrieve tmux session name.", vim.log.levels.ERROR)
-		return {}
-	end
+local function start_goo_impl(commands, window_name)
+        window_name = window_name or "gooTabs"
+        _G.goo_started = true
+        -- Retrieve the current session name
+        local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
+        if not session_name or session_name == "" then
+                vim.notify("Failed to retrieve tmux session name.", vim.log.levels.ERROR)
+                _G.goo_started = false
+                return {}
+        end
 
 	-- escape spaces in session name if present so tmux can interpret it as a single  argument
 	session_name = session_name:gsub(" ", "\\ ")
@@ -49,23 +51,17 @@ function M.start_goo(commands, window_name)
 		-- vim.notify("Existing 'gooTabs' window killed.", vim.log.levels.INFO)
 	end
 
-	-- Create a new tmux window named 'gooTabs' in detached mode
-	local create_cmd = string.format("tmux new-window -d -n %s -t %s:", window_name, session_name)
-	local create_output = exec_cmd(create_cmd)
-	if not create_output then
-		vim.notify("Failed to create new window. Command output: " .. tostring(create_output), vim.log.levels.ERROR)
-		return {}
-	end
+        -- Create a new tmux window named 'gooTabs' and capture the initial pane ID
+        local create_cmd = string.format("tmux new-window -d -n %s -t %s: -P -F '#{pane_id}'", window_name, session_name)
+        local init_id_output = exec_cmd(create_cmd)
+        if not init_id_output or init_id_output == "" then
+                vim.notify("Failed to create new window", vim.log.levels.ERROR)
+                _G.goo_started = false
+                return {}
+        end
+        local initial_pane_id = init_id_output:gsub("%s+", "")
 
        -- Split the initial pane vertically 3 times to create 4 vertical panes
-       local initial_target = string.format("%s:%s.0", session_name, window_name)
-       local init_id_output = exec_cmd(string.format("tmux display-message -p -t %s '#{pane_id}'", initial_target))
-       if not init_id_output or init_id_output == "" then
-               vim.notify("Failed to retrieve initial pane id", vim.log.levels.ERROR)
-               return {}
-       end
-       local initial_pane_id = init_id_output:gsub("%s+", "")
-
        local pane_ids = { initial_pane_id }
 
        for _ = 1, 3 do
@@ -73,6 +69,7 @@ function M.start_goo(commands, window_name)
                local split_output = exec_cmd(split_cmd)
                if not split_output then
                        vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
+                       _G.goo_started = false
                        return {}
                end
                local new_pane = split_output:gsub("%s+", "")
@@ -84,10 +81,11 @@ function M.start_goo(commands, window_name)
         exec_cmd(layout_cmd)
 
 	-- Ensure we have exactly 4 panes
-	if #pane_ids ~= 4 then
-		vim.notify(string.format("Expected 4 panes, but found %d panes.", #pane_ids), vim.log.levels.ERROR)
-		return {}
-	end
+        if #pane_ids ~= 4 then
+                vim.notify(string.format("Expected 4 panes, but found %d panes.", #pane_ids), vim.log.levels.ERROR)
+                _G.goo_started = false
+                return {}
+        end
 
        -- Store pane IDs in environment variables
        for i, pane_id in ipairs(pane_ids) do
@@ -119,9 +117,15 @@ function M.start_goo(commands, window_name)
 		end
 	end
 
-        _G.goo_started = true
-        -- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
-        return pane_ids
+       -- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
+       return pane_ids
+end
+
+-- Public async wrapper so pane creation doesn't block UI
+function M.start_goo(commands, window_name)
+        vim.schedule(function()
+                start_goo_impl(commands, window_name)
+        end)
 end
 
 -- Function to check if a pane exists
