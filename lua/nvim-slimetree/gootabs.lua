@@ -17,10 +17,6 @@ end
 
 -- Function to create the gooTabs window with 4 panes
 local function start_goo_impl(commands, window_name)
-        if _G.goo_busy then
-                return
-        end
-        _G.goo_busy = true
         window_name = window_name or "gooTabs"
         _G.goo_started = true
         -- Retrieve the current session name
@@ -132,6 +128,11 @@ end
 
 -- Public async wrapper so pane creation doesn't block UI
 function M.start_goo(commands, window_name)
+        if _G.goo_busy then
+                -- Avoid starting a second setup while one is already running
+                return
+        end
+        _G.goo_busy = true
         vim.schedule(function()
                 start_goo_impl(commands, window_name)
         end)
