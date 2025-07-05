@@ -57,21 +57,27 @@ function M.start_goo(commands, window_name)
 		return {}
 	end
 
-        -- Split the initial pane vertically 3 times to create 4 vertical panes
-        local initial_pane = string.format("%s:%s.0", session_name, window_name)
+       -- Split the initial pane vertically 3 times to create 4 vertical panes
+       local initial_target = string.format("%s:%s.0", session_name, window_name)
+       local init_id_output = exec_cmd(string.format("tmux display-message -p -t %s '#{pane_id}'", initial_target))
+       if not init_id_output or init_id_output == "" then
+               vim.notify("Failed to retrieve initial pane id", vim.log.levels.ERROR)
+               return {}
+       end
+       local initial_pane_id = init_id_output:gsub("%s+", "")
 
-        local pane_ids = { initial_pane }
+       local pane_ids = { initial_pane_id }
 
-        for _ = 1, 3 do
-                local split_cmd = string.format("tmux split-window -h -P -F '#{pane_id}' -t %s", initial_pane)
-                local split_output = exec_cmd(split_cmd)
-                if not split_output then
-                        vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
-                        return {}
-                end
-                local new_pane = split_output:gsub("%s+", "")
-                table.insert(pane_ids, new_pane)
-        end
+       for _ = 1, 3 do
+               local split_cmd = string.format("tmux split-window -h -P -F '#{pane_id}' -t %s", initial_pane_id)
+               local split_output = exec_cmd(split_cmd)
+               if not split_output then
+                       vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
+                       return {}
+               end
+               local new_pane = split_output:gsub("%s+", "")
+               table.insert(pane_ids, new_pane)
+       end
 
         -- Reset layout to even-horizontal
         local layout_cmd = string.format("tmux select-layout -t %s:%s even-horizontal", session_name, window_name)
