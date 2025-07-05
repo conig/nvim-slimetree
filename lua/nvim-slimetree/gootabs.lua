@@ -70,11 +70,6 @@ end
 
 -- End goo session by killing the window and clearing variables
 function M.end_goo(window_name)
-  if _G.goo_busy then
-    vim.defer_fn(function() M.end_goo(window_name) end, 100)
-    return
-  end
-  _G.goo_busy = true
   window_name = window_name or "gooTabs"
 
   local session = get_session()
