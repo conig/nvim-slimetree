@@ -17,6 +17,10 @@ end
 
 -- Function to create the gooTabs window with 4 panes
 local function start_goo_impl(commands, window_name)
+        if _G.goo_busy then
+                return
+        end
+        _G.goo_busy = true
         window_name = window_name or "gooTabs"
         _G.goo_started = true
         -- Retrieve the current session name
@@ -24,6 +28,7 @@ local function start_goo_impl(commands, window_name)
         if not session_name or session_name == "" then
                 vim.notify("Failed to retrieve tmux session name.", vim.log.levels.ERROR)
                 _G.goo_started = false
+                _G.goo_busy = false
                 return {}
         end
 
@@ -57,6 +62,7 @@ local function start_goo_impl(commands, window_name)
         if not init_id_output or init_id_output == "" then
                 vim.notify("Failed to create new window", vim.log.levels.ERROR)
                 _G.goo_started = false
+                _G.goo_busy = false
                 return {}
         end
         local initial_pane_id = init_id_output:gsub("%s+", "")
@@ -70,6 +76,7 @@ local function start_goo_impl(commands, window_name)
                if not split_output then
                        vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
                        _G.goo_started = false
+                       _G.goo_busy = false
                        return {}
                end
                local new_pane = split_output:gsub("%s+", "")
@@ -84,6 +91,7 @@ local function start_goo_impl(commands, window_name)
         if #pane_ids ~= 4 then
                 vim.notify(string.format("Expected 4 panes, but found %d panes.", #pane_ids), vim.log.levels.ERROR)
                 _G.goo_started = false
+                _G.goo_busy = false
                 return {}
         end
 
@@ -118,6 +126,7 @@ local function start_goo_impl(commands, window_name)
 	end
 
        -- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
+       _G.goo_busy = false
        return pane_ids
 end
 
@@ -145,7 +154,12 @@ end
 
 -- Function to end goo session by killing panes and the gooTabs window
 function M.end_goo(window_name)
-	window_name = window_name or "gooTabs"
+        if _G.goo_busy then
+                vim.defer_fn(function() M.end_goo(window_name) end, 100)
+                return
+        end
+        _G.goo_busy = true
+        window_name = window_name or "gooTabs"
 
        -- Retrieve pane IDs from environment variables
        local pane_ids = {}
@@ -161,16 +175,24 @@ function M.end_goo(window_name)
                end
        end
 
-	-- Kill each pane if it exists
-	for _, pane_id in ipairs(pane_ids) do
-		if pane_exists(pane_id) then
-			local kill_cmd = string.format("tmux kill-pane -t %s", pane_id)
-			local kill_output = exec_cmd(kill_cmd)
-			if not kill_output then
-				vim.notify("Failed to kill pane " .. pane_id, vim.log.levels.ERROR)
-			end
-		end
-	end
+       -- Kill each pane if it exists
+        for _, pane_id in ipairs(pane_ids) do
+                if pane_exists(pane_id) then
+                        local kill_cmd = string.format("tmux kill-pane -t %s", pane_id)
+                        local kill_output = exec_cmd(kill_cmd)
+                        if not kill_output then
+                                vim.notify("Failed to kill pane " .. pane_id, vim.log.levels.ERROR)
+                        end
+                end
+        end
+
+       -- Finally kill the gooTabs window itself if it still exists
+       local session_name = exec_cmd("tmux display-message -p '#S'")
+       if session_name then
+               session_name = session_name:gsub("%s+", "")
+               local kill_window_cmd = string.format("tmux kill-window -t %s:%s", session_name, window_name)
+               exec_cmd(kill_window_cmd)
+       end
 
        -- Unset the environment variables
        for i = 1, 4 do
@@ -180,6 +202,7 @@ function M.end_goo(window_name)
        end
 
        _G.goo_started = false
+       _G.goo_busy = false
 
        vim.notify("All goo panes and the '" .. window_name .. "' window have been closed.", vim.log.levels.INFO)
 end

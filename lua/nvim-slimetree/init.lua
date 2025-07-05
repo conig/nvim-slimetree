@@ -1,4 +1,5 @@
 _G.goo_started = false
+_G.goo_busy = false
 _G.use_goo = true
 local M = {}
 M.gootabs = require("nvim-slimetree.gootabs")
