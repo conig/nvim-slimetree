@@ -1,8 +1,8 @@
 local M = {}
 
-local function exec_cmd(cmd)
+local function exec_cmd(cmd, ignore_errors)
   local out = vim.fn.system(cmd)
-  if vim.v.shell_error ~= 0 then
+  if vim.v.shell_error ~= 0 and not ignore_errors then
     vim.notify(string.format("Failed to execute command: %s\nError:%s", cmd, out), vim.log.levels.ERROR)
     return nil
   end
@@ -23,7 +23,7 @@ local function start_goo_impl(commands, window_name)
     return false
   end
 
-  exec_cmd(string.format("tmux kill-window -t %s:%s 2>/dev/null", session, window_name))
+  exec_cmd(string.format("tmux kill-window -t %s:%s 2>/dev/null", session, window_name), true)
   exec_cmd(string.format("tmux new-window -d -n %s -t %s:", window_name, session))
   for _ = 1, 3 do
     exec_cmd(string.format("tmux split-window -h -t %s:%s", session, window_name))
@@ -74,7 +74,7 @@ function M.end_goo(window_name)
 
   local session = get_session()
   if session then
-    exec_cmd(string.format("tmux kill-window -t %s:%s 2>/dev/null", session, window_name))
+    exec_cmd(string.format("tmux kill-window -t %s:%s 2>/dev/null", session, window_name), true)
   end
 
   for i = 1, 4 do
