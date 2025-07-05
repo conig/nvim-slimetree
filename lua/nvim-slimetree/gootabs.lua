@@ -20,70 +20,63 @@ local function start_goo_impl(commands, window_name)
         window_name = window_name or "gooTabs"
         _G.goo_started = true
         -- Retrieve the current session name
-        local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
-        if not session_name or session_name == "" then
+        local session_name = exec_cmd("tmux display-message -p '#S'")
+        if session_name then
+                session_name = session_name:gsub("%s+", "")
+        else
                 vim.notify("Failed to retrieve tmux session name.", vim.log.levels.ERROR)
                 _G.goo_started = false
                 _G.goo_busy = false
                 return {}
         end
 
-	-- escape spaces in session name if present so tmux can interpret it as a single  argument
-	session_name = session_name:gsub(" ", "\\ ")
-	-- Check if 'gooTabs' window exists
-	local list_windows_cmd = string.format("tmux list-windows -t %s -F '#{window_name}'", session_name)
-	local windows_output = exec_cmd(list_windows_cmd)
-	local window_exists = false
+        -- escape spaces in session name if present so tmux can interpret it as a single  argument
+        session_name = session_name:gsub(" ", "\\ ")
+        -- Check if 'gooTabs' window exists
+        local list_windows_cmd = string.format("tmux list-windows -t %s -F '#{window_name}'", session_name)
+        local windows_output = exec_cmd(list_windows_cmd)
+        local window_exists = false
 
-	if windows_output then
-		for window in windows_output:gmatch("[^\r\n]+") do
-			if window == window_name then
-				window_exists = true
-				break
-			end
-		end
-	end
+        if windows_output then
+                for window in windows_output:gmatch("[^\r\n]+") do
+                        if window == window_name then
+                                window_exists = true
+                                break
+                        end
+                end
+        end
 
-	if window_exists then
-		-- 'gooTabs' window exists, proceed to kill it
-		local kill_cmd = string.format("tmux kill-window -t %s:%s", session_name, window_name)
-		exec_cmd(kill_cmd)
-		-- Optional: Notify the user
-		-- vim.notify("Existing 'gooTabs' window killed.", vim.log.levels.INFO)
-	end
+        if window_exists then
+                -- 'gooTabs' window exists, proceed to kill it
+                local kill_cmd = string.format("tmux kill-window -t %s:%s", session_name, window_name)
+                exec_cmd(kill_cmd)
+        end
 
-        -- Create a new tmux window named 'gooTabs' and capture the initial pane ID
-        local create_cmd = string.format("tmux new-window -d -n %s -t %s: -P -F '#{pane_id}'", window_name, session_name)
-        local init_id_output = exec_cmd(create_cmd)
-        if not init_id_output or init_id_output == "" then
+        -- Build a single tmux command string to create panes quickly
+        local cmds = {
+                string.format("tmux new-window -d -n %s -t %s:", window_name, session_name),
+                string.format("tmux split-window -h -t %s:%s", session_name, window_name),
+                string.format("tmux split-window -h -t %s:%s", session_name, window_name),
+                string.format("tmux split-window -h -t %s:%s", session_name, window_name),
+                string.format("tmux select-layout -t %s:%s even-horizontal", session_name, window_name),
+                string.format("tmux list-panes -t %s:%s -F '#{pane_id}'", session_name, window_name),
+        }
+
+        local combined_cmd = table.concat(cmds, " ; ")
+        local pane_list = exec_cmd(combined_cmd)
+        if not pane_list or pane_list == "" then
                 vim.notify("Failed to create new window", vim.log.levels.ERROR)
                 _G.goo_started = false
                 _G.goo_busy = false
                 return {}
         end
-        local initial_pane_id = init_id_output:gsub("%s+", "")
 
-       -- Split the initial pane vertically 3 times to create 4 vertical panes
-       local pane_ids = { initial_pane_id }
+        local pane_ids = {}
+        for pid in pane_list:gmatch("[^\r\n]+") do
+                table.insert(pane_ids, pid:gsub("%s+", ""))
+        end
 
-       for _ = 1, 3 do
-               local split_cmd = string.format("tmux split-window -h -P -F '#{pane_id}' -t %s", initial_pane_id)
-               local split_output = exec_cmd(split_cmd)
-               if not split_output then
-                       vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
-                       _G.goo_started = false
-                       _G.goo_busy = false
-                       return {}
-               end
-               local new_pane = split_output:gsub("%s+", "")
-               table.insert(pane_ids, new_pane)
-       end
-
-        -- Reset layout to even-horizontal
-        local layout_cmd = string.format("tmux select-layout -t %s:%s even-horizontal", session_name, window_name)
-        exec_cmd(layout_cmd)
-
-	-- Ensure we have exactly 4 panes
+        -- Ensure we have exactly 4 panes
         if #pane_ids ~= 4 then
                 vim.notify(string.format("Expected 4 panes, but found %d panes.", #pane_ids), vim.log.levels.ERROR)
                 _G.goo_started = false
@@ -99,27 +92,27 @@ local function start_goo_impl(commands, window_name)
                vim.fn.setenv(string.format("GOO_PANE_%d", i), pane_id)
        end
 
-	-- Send commands to panes
-	for i, pane_id in ipairs(pane_ids) do
-		local cmd_to_run = nil
-		if commands then
-			if type(commands) == "table" then
-				cmd_to_run = commands[i] or ""
-			else
-				cmd_to_run = commands
-			end
-		else
-			cmd_to_run = "" -- No command, or default command
-		end
+       -- Send commands to panes using a single tmux call for speed
+        local send_cmds = {}
+        for i, pane_id in ipairs(pane_ids) do
+                local cmd_to_run = nil
+                if commands then
+                        if type(commands) == "table" then
+                                cmd_to_run = commands[i] or ""
+                        else
+                                cmd_to_run = commands
+                        end
+                else
+                        cmd_to_run = ""
+                end
 
-		if cmd_to_run and cmd_to_run ~= "" then
-			local send_cmd = string.format("tmux send-keys -t %s '%s' Enter", pane_id, cmd_to_run)
-			local send_output = exec_cmd(send_cmd)
-			if not send_output then
-				vim.notify("Failed to send command to pane with command: " .. send_cmd, vim.log.levels.ERROR)
-			end
-		end
-	end
+                if cmd_to_run and cmd_to_run ~= "" then
+                        table.insert(send_cmds, string.format("tmux send-keys -t %s '%s' Enter", pane_id, cmd_to_run))
+                end
+        end
+        if #send_cmds > 0 then
+                exec_cmd(table.concat(send_cmds, " ; "))
+        end
 
        -- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
        _G.goo_busy = false
