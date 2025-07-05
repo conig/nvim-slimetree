@@ -73,7 +73,8 @@ local function start_goo_impl(commands, window_name)
 
         local pane_ids = {}
         for pid in pane_list:gmatch("[^\r\n]+") do
-                table.insert(pane_ids, pid:gsub("%s+", ""))
+                local sanitized = pid:gsub("%s+", "")
+                table.insert(pane_ids, sanitized)
         end
 
         -- Ensure we have exactly 4 panes
