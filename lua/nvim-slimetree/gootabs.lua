@@ -8,12 +8,6 @@ local function exec_cmd(cmd)
   end
   return out
 end
-
--- Function to escape special characters in Lua patterns
-local function escape_lua_pattern(s)
-	return (s:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1"))
-end
-
 local function get_session()
   local out = exec_cmd("tmux display-message -p '#S'")
   return out and out:gsub("%s+", "") or nil
@@ -41,7 +35,7 @@ local function start_goo_impl(commands, window_name)
 
   local panes = {}
   for pid in out:gmatch("[^\r\n]+") do
-    table.insert(panes, pid:gsub("%s+", ""))
+    panes[#panes + 1] = pid:gsub("%s+", "")
   end
   if #panes ~= 4 then return false end
 
