@@ -165,10 +165,10 @@ function M.end_goo(window_name)
        local pane_ids = {}
        for i = 1, 4 do
                -- Prefer the scoped variable
-               local pane_id = vim.fn.getenv(string.format("%s_%d", window_name, i))
+               local pane_id = os.getenv(string.format("%s_%d", window_name, i))
                -- Fall back to the legacy variable name
                if not pane_id or pane_id == "" then
-                       pane_id = vim.fn.getenv(string.format("GOO_PANE_%d", i))
+                       pane_id = os.getenv(string.format("GOO_PANE_%d", i))
                end
                if pane_id and pane_id ~= "" then
                        table.insert(pane_ids, pane_id)
@@ -227,11 +227,11 @@ function M.summon_goo(n, window_name)
 		return
 	end
 
-	local pane_id = vim.fn.getenv(string.format("%s_%d", window_name, n))
-	if not pane_id or pane_id == "" then
-		vim.notify("Pane ID not found. Make sure to run :StartGoo first.", vim.log.levels.ERROR)
-		return
-	end
+       local pane_id = os.getenv(string.format("%s_%d", window_name, n))
+       if not pane_id or pane_id == "" then
+               vim.notify("Pane ID not found. Make sure to run :StartGoo first.", vim.log.levels.ERROR)
+               return
+       end
 
 	-- Get the current window name
 	local current_window = exec_cmd("tmux display-message -p '#{window_name}'")
@@ -250,8 +250,8 @@ function M.summon_goo(n, window_name)
 	-- Move all goo panes back to 'gooTabs' (except those already there)
 	local panes_moved_back = false
 	for i = 1, 4 do
-		local pid = vim.fn.getenv(string.format("%s_%d", window_name, i))
-		if pid and pid ~= "" then
+                local pid = os.getenv(string.format("%s_%d", window_name, i))
+                if pid and pid ~= "" then
 			-- Get the window name of the pane
 			local pane_window = get_pane_window(pid)
 			if pane_window and pane_window ~= window_name then
