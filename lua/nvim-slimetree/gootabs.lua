@@ -220,6 +220,12 @@ end
 
 -- Function to summon a specific goo pane into the current window
 function M.summon_goo(n, window_name)
+  if _G.goo_busy then
+    vim.defer_fn(function()
+      M.summon_goo(n, window_name)
+    end, 50)
+    return
+  end
   window_name = window_name or "gooTabs"
 	-- Ensure 'n' is between 1 and 4
 	if type(n) ~= "number" or n < 1 or n > 4 then
@@ -227,11 +233,17 @@ function M.summon_goo(n, window_name)
 		return
 	end
 
-       local pane_id = os.getenv(string.format("%s_%d", window_name, n))
-       if not pane_id or pane_id == "" then
-               vim.notify("Pane ID not found. Make sure to run :StartGoo first.", vim.log.levels.ERROR)
-               return
-       end
+  local pane_id = os.getenv(string.format("%s_%d", window_name, n))
+  if not pane_id or pane_id == "" then
+    if _G.goo_busy or _G.goo_started then
+      vim.defer_fn(function()
+        M.summon_goo(n, window_name)
+      end, 50)
+    else
+      vim.notify("Pane ID not found. Make sure to run :StartGoo first.", vim.log.levels.ERROR)
+    end
+    return
+  end
 
 	-- Get the current window name
 	local current_window = exec_cmd("tmux display-message -p '#{window_name}'")
