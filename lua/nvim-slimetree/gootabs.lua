@@ -83,10 +83,13 @@ function M.start_goo(commands, window_name)
 		return {}
 	end
 
-	-- Store pane IDs in environment variables
-	for i, pane_id in ipairs(pane_ids) do
-		vim.fn.setenv(string.format("%s_%d", window_name, i), pane_id)
-	end
+       -- Store pane IDs in environment variables
+       for i, pane_id in ipairs(pane_ids) do
+               -- New scoped variable name
+               vim.fn.setenv(string.format("%s_%d", window_name, i), pane_id)
+               -- Backwards-compatible variable used by earlier configs
+               vim.fn.setenv(string.format("GOO_PANE_%d", i), pane_id)
+       end
 
 	-- Send commands to panes
 	for i, pane_id in ipairs(pane_ids) do
@@ -133,14 +136,19 @@ end
 function M.end_goo(window_name)
 	window_name = window_name or "gooTabs"
 
-	-- Retrieve pane IDs from environment variables
-	local pane_ids = {}
-	for i = 1, 4 do
-		local pane_id = vim.fn.getenv(string.format("%s_%d",window_name, i))
-		if pane_id and pane_id ~= "" then
-			table.insert(pane_ids, pane_id)
-		end
-	end
+       -- Retrieve pane IDs from environment variables
+       local pane_ids = {}
+       for i = 1, 4 do
+               -- Prefer the scoped variable
+               local pane_id = vim.fn.getenv(string.format("%s_%d", window_name, i))
+               -- Fall back to the legacy variable name
+               if not pane_id or pane_id == "" then
+                       pane_id = vim.fn.getenv(string.format("GOO_PANE_%d", i))
+               end
+               if pane_id and pane_id ~= "" then
+                       table.insert(pane_ids, pane_id)
+               end
+       end
 
 	-- Kill each pane if it exists
 	for _, pane_id in ipairs(pane_ids) do
@@ -153,10 +161,12 @@ function M.end_goo(window_name)
 		end
 	end
 
-	-- Unset the environment variables
-	for i = 1, 4 do
-		vim.fn.setenv(string.format("%s_%d", window_name, i), nil)
-	end
+       -- Unset the environment variables
+       for i = 1, 4 do
+               vim.fn.setenv(string.format("%s_%d", window_name, i), nil)
+               -- Also unset legacy variable for compatibility
+               vim.fn.setenv(string.format("GOO_PANE_%d", i), nil)
+       end
 
 	vim.notify("All goo panes and the '" .. window_name .. "' window have been closed.", vim.log.levels.INFO)
 end
