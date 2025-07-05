@@ -113,8 +113,9 @@ function M.start_goo(commands, window_name)
 		end
 	end
 
-	-- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
-	return pane_ids
+        _G.goo_started = true
+        -- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
+        return pane_ids
 end
 
 -- Function to check if a pane exists
@@ -168,7 +169,9 @@ function M.end_goo(window_name)
                vim.fn.setenv(string.format("GOO_PANE_%d", i), nil)
        end
 
-	vim.notify("All goo panes and the '" .. window_name .. "' window have been closed.", vim.log.levels.INFO)
+       _G.goo_started = false
+
+       vim.notify("All goo panes and the '" .. window_name .. "' window have been closed.", vim.log.levels.INFO)
 end
 
 -- Function to summon a specific goo pane into the current window
