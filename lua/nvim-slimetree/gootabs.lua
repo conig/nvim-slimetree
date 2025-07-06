@@ -60,16 +60,14 @@ function M.start_goo(commands, window_name)
 	-- Split the initial pane vertically 3 times to create 4 vertical panes
 	local initial_pane = string.format("%s:%s.0", session_name, window_name)
 
-	for i = 1, 3 do
-		local split_cmd = string.format("tmux split-window -h -t %s", initial_pane)
-		local split_output = exec_cmd(split_cmd)
-		if not split_output then
-			vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
-			return {}
-		end
-		-- Optional: brief sleep to allow tmux to process the split
-		vim.cmd("sleep 50ms")
-	end
+        for i = 1, 3 do
+                local split_cmd = string.format("tmux split-window -h -t %s", initial_pane)
+                local split_output = exec_cmd(split_cmd)
+                if not split_output then
+                        vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
+                        return {}
+                end
+        end
 
 	-- Retrieve pane IDs
 	local panes_output = exec_cmd(string.format("tmux list-panes -t %s:%s -F '#{pane_id}'", session_name, window_name))
