@@ -1,0 +1,23 @@
+return {
+  ["expression_statement"] = true,
+  ["assignment"] = true,
+  ["augmented_assignment"] = true,
+  ["return_statement"] = true,
+  ["import_statement"] = true,
+  ["for_statement"] = true,
+  ["while_statement"] = true,
+  ["if_statement"] = true,
+  ["function_definition"] = true,
+  ["class_definition"] = true,
+  ["call"] = true,
+  ["list"] = true,
+  ["dictionary"] = true,
+  ["tuple"] = true,
+  ["try_statement"] = true,
+  ["with_statement"] = true,
+  ["raise_statement"] = true,
+  ["pass_statement"] = true,
+  ["break_statement"] = true,
+  ["continue_statement"] = true,
+}
+
