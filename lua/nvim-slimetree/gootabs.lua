@@ -127,7 +127,9 @@ function M.start_goo(commands, window_name)
         end
 
         -- Configure vim-slime to target the first pane by default
-        set_slime_target(pane_ids[1])
+        if #pane_ids > 0 then
+            set_slime_target(pane_ids[1])
+        end
 
         -- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
         return pane_ids
