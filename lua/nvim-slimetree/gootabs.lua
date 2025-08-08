@@ -12,7 +12,19 @@ end
 
 -- Function to escape special characters in Lua patterns
 local function escape_lua_pattern(s)
-	return (s:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1"))
+        return (s:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1"))
+end
+
+-- Function to configure vim-slime to target a specific tmux pane
+local function set_slime_target(pane_id)
+        local socket_path = exec_cmd("tmux display-message -p '#{socket_path}'")
+        if not socket_path then
+                return
+        end
+        socket_path = socket_path:gsub("%s+", "")
+        vim.g.slime_target = "tmux"
+        vim.g.slime_default_config = { socket_name = socket_path, target_pane = pane_id }
+        vim.b.slime_config = vim.g.slime_default_config
 end
 
 -- Function to create the gooTabs window with 4 panes
@@ -93,11 +105,11 @@ function M.start_goo(commands, window_name)
 	end
 
 	-- Send commands to panes
-	for i, pane_id in ipairs(pane_ids) do
-		local cmd_to_run = nil
-		if commands then
-			if type(commands) == "table" then
-				cmd_to_run = commands[i] or ""
+        for i, pane_id in ipairs(pane_ids) do
+                local cmd_to_run = nil
+                if commands then
+                        if type(commands) == "table" then
+                                cmd_to_run = commands[i] or ""
 			else
 				cmd_to_run = commands
 			end
@@ -111,11 +123,14 @@ function M.start_goo(commands, window_name)
 			if not send_output then
 				vim.notify("Failed to send command to pane with command: " .. send_cmd, vim.log.levels.ERROR)
 			end
-		end
-	end
+                end
+        end
 
-	-- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
-	return pane_ids
+        -- Configure vim-slime to target the first pane by default
+        set_slime_target(pane_ids[1])
+
+        -- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
+        return pane_ids
 end
 
 -- Function to check if a pane exists
@@ -235,16 +250,19 @@ function M.summon_goo(n, window_name)
 
 	-- Now, check if the desired pane is already in the current window
 	local pane_window = get_pane_window(pane_id)
-	if pane_window == current_window then
-		vim.notify(string.format("Pane %d is already in the current window.", n), vim.log.levels.INFO)
-		return
-	end
+        if pane_window == current_window then
+                vim.notify(string.format("Pane %d is already in the current window.", n), vim.log.levels.INFO)
+                return
+        end
 
-	-- Bring the specified pane into the current window to the right without changing focus
-	local summon_cmd = string.format("tmux join-pane -h -d -s %s -t %s -l 33%%", pane_id, current_window)
-	os.execute(summon_cmd)
-	_G.goo_started = true
-	-- vim.notify(string.format("Summoned pane %d (%s) to window '%s' to the right.", n, pane_id, current_window), vim.log.levels.INFO)
+        -- Configure vim-slime to send directly to the selected pane
+        set_slime_target(pane_id)
+
+        -- Bring the specified pane into the current window to the right without changing focus
+        local summon_cmd = string.format("tmux join-pane -h -d -s %s -t %s -l 33%%", pane_id, current_window)
+        os.execute(summon_cmd)
+        _G.goo_started = true
+        -- vim.notify(string.format("Summoned pane %d (%s) to window '%s' to the right.", n, pane_id, current_window), vim.log.levels.INFO)
 end
 
 return M
