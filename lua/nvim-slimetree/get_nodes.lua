@@ -9,7 +9,7 @@ M.get_nodes = function()
     out.root = require("nodes.R.root")
     out.sub_roots = require("nodes.R.sub_root")
     out.bad_parents = require("nodes.R.bad_parents")
-  elseif vim.bo.filetype == "python" or vim.bo.filetype == "py" then
+  elseif vim.bo.filetype == "python" then
     out.acceptable = require("nodes.python.acceptable")
     out.skip = require("nodes.python.skip")
     out.root = require("nodes.python.root")
