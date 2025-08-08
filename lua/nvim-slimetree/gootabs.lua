@@ -18,8 +18,9 @@ end
 -- Function to configure vim-slime to target a specific tmux pane
 local function set_slime_target(pane_id)
         local socket_path = exec_cmd("tmux display-message -p '#{socket_path}'")
-        if not socket_path then
-                return
+        if not socket_path or socket_path:gsub("%s+", "") == "" then
+          vim.notify("Failed to retrieve tmux socket path.", vim.log.levels.ERROR)
+          return
         end
         socket_path = socket_path:gsub("%s+", "")
         vim.g.slime_target = "tmux"
