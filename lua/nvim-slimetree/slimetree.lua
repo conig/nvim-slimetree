@@ -134,9 +134,9 @@ local function get_node_under_cursor(bufnr, row, node_types)
 	end
 
 	if widest_node then
-		local current_node = widest_node
-		local parent = current_node:parent()
-		while parent and not is_root_node(parent:type(), node_types) and not parent:type() ~= "chunk" do
+                local current_node = widest_node
+                local parent = current_node:parent()
+                while parent and not is_root_node(parent:type(), node_types) and parent:type() ~= "chunk" do
 			local parent_start_row, _, _, _ = parent:range()
 			if parent_start_row == row then
 				current_node = parent
