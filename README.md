@@ -19,6 +19,20 @@ All languages can be supported, however it requires a list of acceptable node ty
 
 This is something I plan to do, as I need it, so feel free to do a PR or fork the library to add support for your language.
 
+## Testing
+
+This repo uses plenary.nvim’s busted harness to run headless tests.
+
+- Run all tests:
+  - `./scripts/test.sh` (or `make test`)
+
+Notes:
+- The script vendors `plenary.nvim` into `tests/pack/vendor/start` on first run.
+- Tests run Neovim headless with a minimal init at `tests/minimal_init.lua`.
+- External integrations are stubbed:
+  - tmux commands are mocked in gootabs tests; tmux is not required.
+  - We avoid loading your user config and only run tests in `tests/`.
+
 ## REPL management
 
 Something I miss from vscode is having multiple terminals which you can switch between.
