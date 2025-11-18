@@ -30,7 +30,7 @@ local function is_skip_node(node_type, node_types)
 end
 
 local function is_root_node(node_type, node_types)
-    return node_types.root[node_type] or false
+    return (node_types.root[node_type] or node_types.sub_roots[node_type]) or false
 end
 
 -- Function to traverse upwards and find the smallest acceptable node
