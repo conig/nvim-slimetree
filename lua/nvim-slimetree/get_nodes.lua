@@ -1,23 +1,11 @@
-M = {}
+local lang = require("nvim-slimetree.core.lang")
+local state = require("nvim-slimetree.state")
 
-M.get_nodes = function()
-  local out = {}
-  -- if filetype in set r, rmd, qmd
-  if vim.bo.filetype == "r" or vim.bo.filetype == "rmd" or vim.bo.filetype == "qmd" then
-    out.acceptable = require("nodes.R.acceptable")
-    out.skip = require("nodes.R.skip")
-    out.root = require("nodes.R.root")
-    out.sub_roots = require("nodes.R.sub_root")
-    out.bad_parents = require("nodes.R.bad_parents")
-  elseif vim.bo.filetype == "python" then
-    out.acceptable = require("nodes.python.acceptable")
-    out.skip = require("nodes.python.skip")
-    out.root = require("nodes.python.root")
-    out.sub_roots = require("nodes.python.sub_root")
-    out.bad_parents = require("nodes.python.bad_parents")
-  end
-  -- vim.notify(vim.inspect(out), "info", {title = "Nodes"})
-  return out
+local M = {}
+
+function M.get_nodes(filetype)
+  local ft = filetype or vim.bo.filetype
+  return lang.resolve_for_filetype(ft, state.config)
 end
 
 return M

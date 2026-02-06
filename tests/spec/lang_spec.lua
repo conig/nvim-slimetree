@@ -1,0 +1,23 @@
+local config = require("nvim-slimetree.config")
+local lang = require("nvim-slimetree.core.lang")
+
+describe("core.lang.resolve_for_filetype", function()
+  before_each(function()
+    lang.clear_cache()
+  end)
+
+  it("resolves known filetype aliases", function()
+    local cfg = config.normalize()
+    local spec, err = lang.resolve_for_filetype("r", cfg)
+    assert.is_nil(err)
+    assert.is_table(spec)
+    assert.is_true(spec.acceptable.call == true)
+  end)
+
+  it("returns unsupported_filetype for unknown filetype", function()
+    local cfg = config.normalize()
+    local spec, err = lang.resolve_for_filetype("ruby", cfg)
+    assert.is_nil(spec)
+    assert.are.equal("unsupported_filetype", err)
+  end)
+end)
