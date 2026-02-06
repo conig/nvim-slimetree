@@ -29,4 +29,33 @@ function M.append(x, y)
     return result
 end
 
+-- Refresh the Tree-sitter parser and reparse if the tree looks out of sync
+function M.refresh_parser(bufnr)
+    bufnr = bufnr or vim.api.nvim_get_current_buf()
+    local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+    if not ok or not parser then
+        return
+    end
+
+    local trees = parser:parse()
+    local tree = trees and trees[1]
+    if not tree then
+        return
+    end
+
+    local root = tree:root()
+    if not root then
+        return
+    end
+
+    local _, _, end_row = root:range()
+    local line_count = vim.api.nvim_buf_line_count(bufnr)
+
+    -- If the root does not span (almost) the whole buffer, force a full reparse
+    if end_row < line_count - 1 or end_row > line_count + 5 then
+        parser:invalidate(true)
+        parser:parse()
+    end
+end
+
 return M

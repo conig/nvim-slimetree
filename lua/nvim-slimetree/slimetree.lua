@@ -233,6 +233,7 @@ function M.goo_move(hold_position)
     hold_position = hold_position or false
     -- Get the current buffer and cursor position
     local bufnr = vim.api.nvim_get_current_buf()
+    utils.refresh_parser(bufnr)
     local cursor = vim.api.nvim_win_get_cursor(0) -- {row, col}
     local row = cursor[1] - 1 -- Convert to 0-based
     local col = cursor[2]
