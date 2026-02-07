@@ -43,6 +43,10 @@ local defaults = {
     qmd = "R",
     quarto = "R",
     python = "python",
+    sh = "bash",
+    bash = "bash",
+    zsh = "bash",
+    ksh = "bash",
   },
 }
 

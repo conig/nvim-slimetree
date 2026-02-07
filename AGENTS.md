@@ -40,8 +40,10 @@ lua/
   nodes/
     R/
     python/
+    bash/
 tests/
   minimal_init.lua
+  scripts/
   spec/
 ```
 
@@ -179,14 +181,18 @@ Minimum required coverage:
 1. cursor movement policy (`core/cursor.lua`)
 2. selector acceptance and traversal (`core/selector.lua`)
 3. filetype resolution and unsupported behavior (`core/lang.lua`)
+4. parser-backed selection behavior for Python and Bash specs
 
 Do not treat vendored `plenary.nvim` tests as project behavior coverage.
 
 Run tests with:
 
 ```bash
+tests/scripts/bootstrap_parsers.sh
 nvim --headless -i NONE -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/spec { minimal_init = 'tests/minimal_init.lua' }" -c qa
 ```
+
+`tests/scripts/bootstrap_parsers.sh` installs test parser dependencies (`nvim-treesitter`, `python`, and `bash`) into repo-local test paths.
 
 ## Performance constraints
 

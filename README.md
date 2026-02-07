@@ -7,6 +7,14 @@ It has two features:
 1. Deterministic chunk execution (`slimetree`)
 2. Optional tmux pane management (`gootabs`)
 
+## Language Support
+
+Built-in node specs are included for:
+
+- R (`r`, `rmd`, `qmd`, `quarto`)
+- Python (`python`)
+- Bash/shell (`bash`, `sh`, `zsh`, `ksh`)
+
 ## Defaults
 
 - tmux/gootabs is **off** by default.
@@ -18,7 +26,7 @@ It has two features:
 return {
   {
     "conig/nvim-slimetree",
-    ft = { "r", "rmd", "qmd", "quarto", "python" },
+    ft = { "r", "rmd", "qmd", "quarto", "python", "bash", "sh", "zsh", "ksh" },
     dependencies = { "jpalardy/vim-slime" },
     config = function()
       local st = require("nvim-slimetree")
@@ -89,5 +97,8 @@ end)
 ## Tests
 
 ```bash
+tests/scripts/bootstrap_parsers.sh
 nvim --headless -i NONE -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/spec { minimal_init = 'tests/minimal_init.lua' }" -c qa
 ```
+
+`tests/scripts/bootstrap_parsers.sh` clones `nvim-treesitter` into `tests/pack/vendor/start/` on first run and installs the `python` and `bash` parsers into `tests/pack/vendor/parsers/`.
