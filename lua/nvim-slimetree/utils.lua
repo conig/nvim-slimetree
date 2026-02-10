@@ -1,4 +1,5 @@
 local M = {}
+local parser_tick_cache = {}
 
 function M.in_set(value, set)
   return type(set) == "table" and set[value] == true
@@ -33,23 +34,13 @@ function M.refresh_parser(bufnr)
     return false
   end
 
-  local trees = parser:parse()
-  local tree = trees and trees[1]
-  if not tree then
-    return false
+  local tick = vim.api.nvim_buf_get_changedtick(bufnr)
+  if parser_tick_cache[bufnr] == tick then
+    return true
   end
 
-  local root = tree:root()
-  if not root then
-    return false
-  end
-
-  local _, _, end_row = root:range()
-  local line_count = vim.api.nvim_buf_line_count(bufnr)
-  if end_row < line_count - 1 or end_row > line_count + 5 then
-    parser:invalidate(true)
-    parser:parse()
-  end
+  parser:parse()
+  parser_tick_cache[bufnr] = tick
 
   return true
 end

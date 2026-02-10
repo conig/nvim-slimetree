@@ -2,6 +2,7 @@ local cursor_core = require("nvim-slimetree.core.cursor")
 local lang = require("nvim-slimetree.core.lang")
 local selector = require("nvim-slimetree.core.selector")
 local state = require("nvim-slimetree.state")
+local transport = require("nvim-slimetree.core.transport")
 local utils = require("nvim-slimetree.utils")
 
 local M = {}
@@ -15,16 +16,35 @@ local function warn_deprecation(key, msg)
   utils.notify(state.config, msg, vim.log.levels.WARN)
 end
 
-local function send_to_slime(start_line, end_line)
-  local range = string.format("%d,%dSlimeSend", start_line + 1, end_line + 1)
-  vim.cmd(range)
+local function build_send_text(bufnr, start_row, end_row)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, start_row, end_row + 1, false)
+  return table.concat(lines, "\n")
+end
+
+local function send_to_repl(text, bufnr)
+  return transport.send(text, {
+    bufnr = bufnr,
+    config = state.config,
+  })
 end
 
 function M.send_line()
+  local bufnr = vim.api.nvim_get_current_buf()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local row = cursor[1] - 1
-  send_to_slime(row, row)
-  return { ok = true, reason = "ok", start_row = row, end_row = row }
+  local text = build_send_text(bufnr, row, row)
+  local send_result = send_to_repl(text, bufnr)
+  if not send_result.ok then
+    return send_result
+  end
+
+  return {
+    ok = true,
+    reason = "ok",
+    start_row = row,
+    end_row = row,
+    transport = send_result,
+  }
 end
 
 function M.send_current(opts)
@@ -58,8 +78,6 @@ function M.send_current(opts)
     return selection
   end
 
-  send_to_slime(selection.start_row, selection.end_row)
-
   local should_move = cfg.cursor.move_after_send
   if opts.move_after_send ~= nil then
     should_move = opts.move_after_send
@@ -78,6 +96,23 @@ function M.send_current(opts)
     vim.api.nvim_win_set_cursor(0, { next_cursor.row, next_cursor.col })
   end
 
+  local text = build_send_text(bufnr, selection.start_row, selection.end_row)
+  local send_result = send_to_repl(text, bufnr)
+  if not send_result.ok then
+    return {
+      ok = false,
+      reason = send_result.reason or "send_failed",
+      error = send_result.error,
+      sent_range = {
+        start_row = selection.start_row,
+        end_row = selection.end_row,
+      },
+      node_type = selection.node_type,
+      next_cursor = next_cursor,
+      transport = send_result,
+    }
+  end
+
   return {
     ok = true,
     reason = "ok",
@@ -87,6 +122,7 @@ function M.send_current(opts)
     },
     node_type = selection.node_type,
     next_cursor = next_cursor,
+    transport = send_result,
   }
 end
 
@@ -101,7 +137,19 @@ function M.SlimeCurrentLine()
 end
 
 function M.goo_send(text)
-  vim.fn["slime#send"]((text or "") .. "\n")
+  local payload = text
+  if payload == nil or payload == "" then
+    payload = "\n"
+  end
+  return send_to_repl(payload, vim.api.nvim_get_current_buf())
+end
+
+function M.transport_status()
+  return transport.status()
+end
+
+function M.transport_restart()
+  return transport.restart()
 end
 
 return M

@@ -8,7 +8,7 @@ This document is the contributor and implementation spec for `nvim-slimetree`.
 
 The plugin has two independent domains:
 
-1. `slimetree`: choose executable chunk under/after cursor and send to `vim-slime`.
+1. `slimetree`: choose executable chunk under/after cursor and send to configured transport (`tmux_native` or `vim-slime` fallback).
 2. `gootabs`: optional tmux pane/window orchestration for multi-REPL workflows.
 
 `slimetree` must work even when `gootabs` is disabled.
@@ -37,6 +37,10 @@ lua/
       lang.lua
       selector.lua
       cursor.lua
+      transport/
+        init.lua
+        tmux_native.lua
+        slime.lua
   nodes/
     R/
     python/
@@ -60,6 +64,7 @@ Responsibilities:
 3. Keep compatibility globals in sync:
    - `_G.goo_started`
    - `_G.use_goo`
+4. Provide `get_state()` as a deep-copied runtime snapshot for diagnostics/tests.
 
 ### `config.lua`
 
@@ -68,12 +73,22 @@ Defines defaults and configuration normalization.
 Config keys:
 
 - `repl.require_gootabs` (default `false`)
+- `transport.backend` (`auto|tmux_native|slime`, default `auto`)
+- `transport.async` (default `true`)
+- `transport.mode` (`control|exec`, default `control`)
+- `transport.max_queue` (default `256`)
+- `transport.fallback_to_slime` (default `true`)
+- `transport.tmux.buffer_name` (default `"slimetree_send"`)
+- `transport.tmux.cancel_copy_mode` (default `true`)
+- `transport.tmux.bracketed_paste` (`auto|true|false`, default `auto`)
+- `transport.tmux.append_newline` (default `true`)
+- `transport.tmux.enter_mode` (`auto|always|never`, default `auto`)
 - `cursor.move_after_send` (default `true`)
 - `cursor.default_col` (default `0`)
 - `gootabs.enabled` (default `false`)
 - `gootabs.auto_start` (default `false`)
 - `gootabs.window_name` (default `"gooTabs"`)
-- `gootabs.layout` (`none|single|grid4|custom`)
+- `gootabs.layout` (`none|single|grid4|custom`, default `grid4`)
 - `gootabs.pane_count`
 - `gootabs.pane_commands`
 - `gootabs.join_on_select`
@@ -91,6 +106,7 @@ Tracks:
 
 - active normalized config
 - gootabs lifecycle state (`started`, pane ids, window name, active target)
+- transport runtime state (queue, running/connected flags, last error, counters)
 
 ### `core/lang.lua`
 
@@ -135,6 +151,9 @@ Primary APIs:
 
 - `send_current(opts?)`
 - `send_line()`
+- `transport_status()`
+- `transport_restart()`
+- `goo_send(text)` (legacy direct-send helper; prefer `send_current`/`send_line` for chunk-aware behavior)
 
 Compatibility shims:
 

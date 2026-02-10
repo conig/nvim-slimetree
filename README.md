@@ -18,7 +18,9 @@ Built-in node specs are included for:
 ## Defaults
 
 - tmux/gootabs is **off** by default.
-- REPL send works with `vim-slime` without creating extra panes.
+- REPL send auto-selects transport:
+  - native tmux async sender when tmux target config is present
+  - `vim-slime` fallback otherwise.
 
 ## Installation
 
@@ -32,6 +34,10 @@ return {
       local st = require("nvim-slimetree")
 
       st.setup({
+        transport = {
+          backend = "auto",
+          async = true,
+        },
         gootabs = {
           enabled = false,
         },
@@ -81,10 +87,33 @@ end)
 - `require("nvim-slimetree").setup(opts)`
 - `st.slimetree.send_current(opts?)`
 - `st.slimetree.send_line()`
+- `st.slimetree.transport_status()`
+- `st.slimetree.transport_restart()`
 - `st.gootabs.start(opts?)`
 - `st.gootabs.select(index, opts?)`
 - `st.gootabs.stop(opts?)`
 - `st.gootabs.status()`
+
+## Transport options
+
+```lua
+st.setup({
+  transport = {
+    backend = "auto", -- auto|tmux_native|slime
+    async = true,
+    mode = "control", -- currently handled by native sender implementation
+    max_queue = 256,
+    fallback_to_slime = true,
+    tmux = {
+      buffer_name = "slimetree_send",
+      cancel_copy_mode = true,
+      bracketed_paste = "auto", -- auto|true|false
+      append_newline = true,
+      enter_mode = "auto", -- auto|always|never
+    },
+  },
+})
+```
 
 ## Deprecated (still shimmed)
 

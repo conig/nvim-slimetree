@@ -18,6 +18,20 @@ local defaults = {
   repl = {
     require_gootabs = false,
   },
+  transport = {
+    backend = "auto",
+    async = true,
+    mode = "control",
+    max_queue = 256,
+    fallback_to_slime = true,
+    tmux = {
+      buffer_name = "slimetree_send",
+      cancel_copy_mode = true,
+      bracketed_paste = "auto",
+      append_newline = true,
+      enter_mode = "auto",
+    },
+  },
   cursor = {
     move_after_send = true,
     default_col = 0,
@@ -57,6 +71,56 @@ end
 function M.normalize(user_opts)
   local cfg = M.defaults()
   merge_into(cfg, user_opts or {})
+
+  local valid_backend = {
+    auto = true,
+    tmux_native = true,
+    slime = true,
+  }
+  if not valid_backend[cfg.transport.backend] then
+    cfg.transport.backend = "auto"
+  end
+
+  cfg.transport.async = cfg.transport.async ~= false
+
+  local valid_mode = {
+    control = true,
+    exec = true,
+  }
+  if not valid_mode[cfg.transport.mode] then
+    cfg.transport.mode = "control"
+  end
+
+  if type(cfg.transport.max_queue) ~= "number" then
+    cfg.transport.max_queue = 256
+  end
+  cfg.transport.max_queue = math.floor(cfg.transport.max_queue)
+  if cfg.transport.max_queue < 1 then
+    cfg.transport.max_queue = 1
+  end
+
+  cfg.transport.fallback_to_slime = cfg.transport.fallback_to_slime ~= false
+
+  local valid_enter_mode = {
+    auto = true,
+    always = true,
+    never = true,
+  }
+  if not valid_enter_mode[cfg.transport.tmux.enter_mode] then
+    cfg.transport.tmux.enter_mode = "auto"
+  end
+
+  local bracketed = cfg.transport.tmux.bracketed_paste
+  if bracketed ~= "auto" and type(bracketed) ~= "boolean" then
+    cfg.transport.tmux.bracketed_paste = "auto"
+  end
+
+  cfg.transport.tmux.cancel_copy_mode = cfg.transport.tmux.cancel_copy_mode ~= false
+  cfg.transport.tmux.append_newline = cfg.transport.tmux.append_newline ~= false
+
+  if type(cfg.transport.tmux.buffer_name) ~= "string" or cfg.transport.tmux.buffer_name == "" then
+    cfg.transport.tmux.buffer_name = "slimetree_send"
+  end
 
   if cfg.gootabs.layout == "single" then
     cfg.gootabs.pane_count = 1

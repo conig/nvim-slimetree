@@ -8,6 +8,7 @@ M.slimetree = require("nvim-slimetree.slimetree")
 
 function M.setup(opts)
   state.config = config.normalize(opts)
+  state.reset_transport()
 
   if not state.config.gootabs.enabled then
     state.reset_gootabs()
@@ -29,6 +30,7 @@ function M.get_state()
   return {
     config = vim.deepcopy(state.config),
     gootabs = vim.deepcopy(state.gootabs),
+    transport = vim.deepcopy(state.transport),
   }
 end
 
