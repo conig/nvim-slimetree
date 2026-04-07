@@ -1,272 +1,342 @@
+local state = require("nvim-slimetree.state")
+local utils = require("nvim-slimetree.utils")
+
 local M = {}
+local deprecation_emitted = {}
 
-local function exec_cmd(cmd)
-	local result = vim.fn.system(cmd)
-	local exit_code = vim.v.shell_error
-	if exit_code ~= 0 then
-		vim.notify(string.format("Failed to execute command: %s\nError: %s", cmd, result), vim.log.levels.ERROR)
-		return nil
-	end
-	return result
+local function warn_deprecation(key, msg)
+  if deprecation_emitted[key] then
+    return
+  end
+  deprecation_emitted[key] = true
+  utils.notify(state.config, msg, vim.log.levels.WARN)
 end
 
--- Function to escape special characters in Lua patterns
-local function escape_lua_pattern(s)
-        return (s:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1"))
+local function set_compat_globals()
+  _G.goo_started = state.gootabs.started
+  _G.use_goo = state.config.gootabs.enabled
 end
 
--- Function to configure vim-slime to target a specific tmux pane
+local function trim(s)
+  return (s or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function split_lines(text)
+  local out = {}
+  for line in (text or ""):gmatch("[^\r\n]+") do
+    table.insert(out, trim(line))
+  end
+  return out
+end
+
+local function run_tmux(args)
+  local escaped = {}
+  for _, arg in ipairs(args) do
+    table.insert(escaped, vim.fn.shellescape(tostring(arg)))
+  end
+
+  local cmd = "tmux " .. table.concat(escaped, " ")
+  local output = vim.fn.system(cmd)
+  if vim.v.shell_error ~= 0 then
+    return nil, trim(output)
+  end
+  return trim(output), nil
+end
+
 local function set_slime_target(pane_id)
-        local socket_path = exec_cmd("tmux display-message -p '#{socket_path}'")
-        if not socket_path or socket_path:gsub("%s+", "") == "" then
-          vim.notify("Failed to retrieve tmux socket path.", vim.log.levels.ERROR)
-          return
-        end
-        socket_path = socket_path:gsub("%s+", "")
-        vim.g.slime_target = "tmux"
-        vim.g.slime_default_config = { socket_name = socket_path, target_pane = pane_id }
-        vim.b.slime_config = vim.g.slime_default_config
+  local socket_path, socket_err = run_tmux({ "display-message", "-p", "#{socket_path}" })
+  if not socket_path then
+    return nil, socket_err or "failed_to_get_tmux_socket"
+  end
+
+  vim.g.slime_target = "tmux"
+  vim.g.slime_default_config = {
+    socket_name = socket_path,
+    target_pane = pane_id,
+  }
+  vim.b.slime_config = vim.g.slime_default_config
+
+  return true
 end
 
--- Function to create the gooTabs window with 4 panes
-function M.start_goo(commands, window_name)
-	window_name = window_name or "gooTabs"
-	-- Retrieve the current session name
-	local session_name = exec_cmd("tmux display-message -p '#S'"):gsub("\n", "")
-	if not session_name or session_name == "" then
-		vim.notify("Failed to retrieve tmux session name.", vim.log.levels.ERROR)
-		return {}
-	end
-
-	-- escape spaces in session name if present so tmux can interpret it as a single  argument
-	session_name = session_name:gsub(" ", "\\ ")
-	-- Check if 'gooTabs' window exists
-	local list_windows_cmd = string.format("tmux list-windows -t %s -F '#{window_name}'", session_name)
-	local windows_output = exec_cmd(list_windows_cmd)
-	local window_exists = false
-
-	if windows_output then
-		for window in windows_output:gmatch("[^\r\n]+") do
-			if window == window_name then
-				window_exists = true
-				break
-			end
-		end
-	end
-
-	if window_exists then
-		-- 'gooTabs' window exists, proceed to kill it
-		local kill_cmd = string.format("tmux kill-window -t %s:%s", session_name, window_name)
-		exec_cmd(kill_cmd)
-		-- Optional: Notify the user
-		-- vim.notify("Existing 'gooTabs' window killed.", vim.log.levels.INFO)
-	end
-
-	-- Create a new tmux window named 'gooTabs' in detached mode
-	local create_cmd = string.format("tmux new-window -d -n %s -t %s:", window_name, session_name)
-	local create_output = exec_cmd(create_cmd)
-	if not create_output then
-		vim.notify("Failed to create new window. Command output: " .. tostring(create_output), vim.log.levels.ERROR)
-		return {}
-	end
-
-	-- Split the initial pane vertically 3 times to create 4 vertical panes
-	local initial_pane = string.format("%s:%s.0", session_name, window_name)
-
-        for i = 1, 3 do
-                local split_cmd = string.format("tmux split-window -h -t %s", initial_pane)
-                local split_output = exec_cmd(split_cmd)
-                if not split_output then
-                        vim.notify("Failed to split pane with command: " .. split_cmd, vim.log.levels.ERROR)
-                        return {}
-                end
-        end
-
-	-- Retrieve pane IDs
-	local panes_output = exec_cmd(string.format("tmux list-panes -t %s:%s -F '#{pane_id}'", session_name, window_name))
-	if not panes_output or panes_output == "" then
-		vim.notify("Failed to retrieve pane IDs.", vim.log.levels.ERROR)
-		return {}
-	end
-
-	local pane_ids = {}
-	for pane_id in panes_output:gmatch("[^\r\n]+") do
-		table.insert(pane_ids, pane_id)
-	end
-
-	-- Ensure we have exactly 4 panes
-	if #pane_ids ~= 4 then
-		vim.notify(string.format("Expected 4 panes, but found %d panes.", #pane_ids), vim.log.levels.ERROR)
-		return {}
-	end
-
-	-- Store pane IDs in environment variables
-	for i, pane_id in ipairs(pane_ids) do
-		vim.fn.setenv(string.format("%s_%d", window_name, i), pane_id)
-	end
-
-	-- Send commands to panes
-        for i, pane_id in ipairs(pane_ids) do
-                local cmd_to_run = nil
-                if commands then
-                        if type(commands) == "table" then
-                                cmd_to_run = commands[i] or ""
-			else
-				cmd_to_run = commands
-			end
-		else
-			cmd_to_run = "" -- No command, or default command
-		end
-
-		if cmd_to_run and cmd_to_run ~= "" then
-			local send_cmd = string.format("tmux send-keys -t %s '%s' Enter", pane_id, cmd_to_run)
-			local send_output = exec_cmd(send_cmd)
-			if not send_output then
-				vim.notify("Failed to send command to pane with command: " .. send_cmd, vim.log.levels.ERROR)
-			end
-                end
-        end
-
-        -- Configure vim-slime to target the first pane by default
-        if #pane_ids > 0 then
-            set_slime_target(pane_ids[1])
-        end
-
-        -- vim.notify("gooTabs window with 4 vertical panes created successfully.", vim.log.levels.INFO)
-        return pane_ids
+local function get_session_name()
+  return run_tmux({ "display-message", "-p", "#S" })
 end
 
--- Function to check if a pane exists
-local function pane_exists(pane_id)
-	local panes_output = exec_cmd("tmux list-panes -a -F '#{pane_id}'")
-	if not panes_output then
-		return false
-	end
-	-- Escape special characters in pane_id
-	local escaped_pane_id = escape_lua_pattern(pane_id)
-	if panes_output:find(escaped_pane_id) then
-		return true
-	else
-		return false
-	end
+local function list_windows(session_name)
+  local out, err = run_tmux({ "list-windows", "-t", session_name, "-F", "#{window_name}" })
+  if not out then
+    return nil, err
+  end
+  return split_lines(out)
 end
 
--- Function to end goo session by killing panes and the gooTabs window
-function M.end_goo(window_name)
-	window_name = window_name or "gooTabs"
+local function window_exists(session_name, window_name)
+  local windows, err = list_windows(session_name)
+  if not windows then
+    return false, err
+  end
 
-	-- Retrieve pane IDs from environment variables
-	local pane_ids = {}
-	for i = 1, 4 do
-		local pane_id = vim.fn.getenv(string.format("%s_%d",window_name, i))
-		if pane_id and pane_id ~= "" then
-			table.insert(pane_ids, pane_id)
-		end
-	end
+  for _, name in ipairs(windows) do
+    if name == window_name then
+      return true
+    end
+  end
 
-	-- Kill each pane if it exists
-	for _, pane_id in ipairs(pane_ids) do
-		if pane_exists(pane_id) then
-			local kill_cmd = string.format("tmux kill-pane -t %s", pane_id)
-			local kill_output = exec_cmd(kill_cmd)
-			if not kill_output then
-				vim.notify("Failed to kill pane " .. pane_id, vim.log.levels.ERROR)
-			end
-		end
-	end
-
-	-- Unset the environment variables
-	for i = 1, 4 do
-		vim.fn.setenv(string.format("%s_%d", window_name, i), nil)
-	end
-
-	vim.notify("All goo panes and the '" .. window_name .. "' window have been closed.", vim.log.levels.INFO)
+  return false
 end
 
--- Function to summon a specific goo pane into the current window
--- Helper function to get the window name of a given pane
+local function list_panes(target)
+  local out, err = run_tmux({ "list-panes", "-t", target, "-F", "#{pane_id}" })
+  if not out then
+    return nil, err
+  end
+  return split_lines(out)
+end
+
 local function get_pane_window(pane_id)
-	local output = exec_cmd(string.format("tmux display-message -p -t %s '#{window_name}'", pane_id))
-	if output then
-		return output:gsub("%s+", "") -- Trim whitespace
-	else
-		return nil
-	end
+  local out = run_tmux({ "display-message", "-p", "-t", pane_id, "#{window_name}" })
+  return out
 end
 
--- Function to summon a specific goo pane into the current window
+local function resolve_window_name(opts)
+  return (opts and opts.window_name) or state.config.gootabs.window_name
+end
+
+local function resolve_pane_count(opts)
+  if opts and opts.pane_count ~= nil then
+    return opts.pane_count
+  end
+  return state.config.gootabs.pane_count
+end
+
+local function resolve_pane_commands(opts)
+  if opts and opts.pane_commands ~= nil then
+    return opts.pane_commands
+  end
+  return state.config.gootabs.pane_commands
+end
+
+local function resolve_join_enabled(opts)
+  if opts and opts.join_on_select ~= nil then
+    return opts.join_on_select
+  end
+  return state.config.gootabs.join_on_select
+end
+
+local function resolve_join_size(opts)
+  if opts and opts.join_size ~= nil then
+    return opts.join_size
+  end
+  return state.config.gootabs.join_size
+end
+
+local function reset_layout_if_needed(window_name)
+  if not state.config.gootabs.reset_layout_on_return then
+    return
+  end
+  run_tmux({ "select-layout", "-t", window_name, "even-horizontal" })
+end
+
+function M.status()
+  return vim.deepcopy(state.gootabs)
+end
+
+function M.start(opts)
+  if not state.config.gootabs.enabled then
+    local msg = "gootabs is disabled; enable it via setup({ gootabs = { enabled = true } })."
+    utils.notify(state.config, msg, vim.log.levels.WARN)
+    return { ok = false, reason = "gootabs_disabled" }
+  end
+
+  local session_name, session_err = get_session_name()
+  if not session_name then
+    utils.notify(state.config, "Failed to detect tmux session: " .. (session_err or "unknown"), vim.log.levels.ERROR)
+    return { ok = false, reason = "tmux_session_missing" }
+  end
+
+  local window_name = resolve_window_name(opts)
+  local pane_count = resolve_pane_count(opts)
+  if pane_count <= 0 then
+    return { ok = false, reason = "invalid_pane_count" }
+  end
+
+  local exists, exists_err = window_exists(session_name, window_name)
+  if exists_err then
+    utils.notify(state.config, "Failed to query tmux windows: " .. exists_err, vim.log.levels.ERROR)
+    return { ok = false, reason = "tmux_query_failed" }
+  end
+
+  if exists then
+    local _, kill_err = run_tmux({ "kill-window", "-t", session_name .. ":" .. window_name })
+    if kill_err then
+      utils.notify(state.config, "Failed to reset existing gootabs window: " .. kill_err, vim.log.levels.ERROR)
+      return { ok = false, reason = "kill_window_failed" }
+    end
+  end
+
+  local _, create_err = run_tmux({ "new-window", "-d", "-n", window_name, "-t", session_name .. ":" })
+  if create_err then
+    utils.notify(state.config, "Failed to create gootabs window: " .. create_err, vim.log.levels.ERROR)
+    return { ok = false, reason = "create_window_failed" }
+  end
+
+  local initial_target = session_name .. ":" .. window_name .. ".0"
+  for _ = 2, pane_count do
+    local _, split_err = run_tmux({ "split-window", "-h", "-t", initial_target })
+    if split_err then
+      utils.notify(state.config, "Failed to split tmux pane: " .. split_err, vim.log.levels.ERROR)
+      return { ok = false, reason = "split_failed" }
+    end
+  end
+
+  if pane_count > 1 then
+    run_tmux({ "select-layout", "-t", session_name .. ":" .. window_name, "even-horizontal" })
+  end
+
+  local pane_ids, panes_err = list_panes(session_name .. ":" .. window_name)
+  if not pane_ids or #pane_ids == 0 then
+    utils.notify(state.config, "Failed to collect tmux pane ids: " .. (panes_err or "unknown"), vim.log.levels.ERROR)
+    return { ok = false, reason = "panes_missing" }
+  end
+
+  local commands = resolve_pane_commands(opts)
+  for i, pane_id in ipairs(pane_ids) do
+    local cmd = nil
+    if type(commands) == "table" then
+      cmd = commands[i]
+    elseif type(commands) == "string" then
+      cmd = commands
+    end
+
+    if type(cmd) == "string" and cmd ~= "" then
+      run_tmux({ "send-keys", "-t", pane_id, cmd, "Enter" })
+    end
+  end
+
+  set_slime_target(pane_ids[1])
+
+  state.gootabs.started = true
+  state.gootabs.panes = pane_ids
+  state.gootabs.window_name = window_name
+  state.gootabs.target_index = 1
+  set_compat_globals()
+
+  return {
+    ok = true,
+    reason = "ok",
+    panes = vim.deepcopy(pane_ids),
+    window_name = window_name,
+  }
+end
+
+function M.stop(opts)
+  local session_name = get_session_name()
+  local window_name = resolve_window_name(opts)
+
+  if session_name and window_name then
+    local exists = window_exists(session_name, window_name)
+    if exists then
+      run_tmux({ "kill-window", "-t", session_name .. ":" .. window_name })
+    end
+  end
+
+  state.reset_gootabs()
+  set_compat_globals()
+  return { ok = true, reason = "ok" }
+end
+
+function M.select(index, opts)
+  if type(index) ~= "number" or index < 1 then
+    return { ok = false, reason = "invalid_index" }
+  end
+
+  if not state.gootabs.started then
+    if state.config.gootabs.auto_start then
+      local started = M.start(opts)
+      if not started.ok then
+        return started
+      end
+    else
+      return { ok = false, reason = "gootabs_not_started" }
+    end
+  end
+
+  local pane_id = state.gootabs.panes[index]
+  if not pane_id then
+    return { ok = false, reason = "pane_not_found" }
+  end
+
+  local ok, target_err = set_slime_target(pane_id)
+  if not ok then
+    return { ok = false, reason = target_err or "slime_target_failed" }
+  end
+
+  local join_on_select = resolve_join_enabled(opts)
+  if not join_on_select then
+    state.gootabs.target_index = index
+    set_compat_globals()
+    return { ok = true, reason = "ok", pane_id = pane_id, joined = false }
+  end
+
+  local current_window, current_err = run_tmux({ "display-message", "-p", "#{window_name}" })
+  if not current_window then
+    return { ok = false, reason = current_err or "current_window_missing" }
+  end
+
+  local window_name = state.gootabs.window_name
+  if current_window == window_name then
+    return { ok = false, reason = "cannot_join_from_gootabs_window" }
+  end
+
+  local moved_any = false
+  for _, pid in ipairs(state.gootabs.panes) do
+    local pane_window = get_pane_window(pid)
+    if pane_window and pane_window ~= window_name then
+      local _, move_err = run_tmux({ "move-pane", "-d", "-s", pid, "-t", window_name })
+      if not move_err then
+        moved_any = true
+      end
+    end
+  end
+
+  if moved_any then
+    reset_layout_if_needed(window_name)
+  end
+
+  local pane_window = get_pane_window(pane_id)
+  if pane_window ~= current_window then
+    local join_size = resolve_join_size(opts)
+    local _, join_err = run_tmux({ "join-pane", "-h", "-d", "-s", pane_id, "-t", current_window, "-l", join_size })
+    if join_err then
+      return { ok = false, reason = join_err }
+    end
+  end
+
+  state.gootabs.started = true
+  state.gootabs.target_index = index
+  set_compat_globals()
+
+  return { ok = true, reason = "ok", pane_id = pane_id, joined = true }
+end
+
+function M.start_goo(commands, window_name)
+  warn_deprecation("start_goo", "gootabs.start_goo() is deprecated; use gootabs.start().")
+  local out = M.start({ pane_commands = commands, window_name = window_name })
+  if out.ok then
+    return out.panes
+  end
+  return {}
+end
+
+function M.end_goo(window_name)
+  warn_deprecation("end_goo", "gootabs.end_goo() is deprecated; use gootabs.stop().")
+  return M.stop({ window_name = window_name })
+end
+
 function M.summon_goo(n, window_name)
-  window_name = window_name or "gooTabs"
-	-- Ensure 'n' is between 1 and 4
-	if type(n) ~= "number" or n < 1 or n > 4 then
-		vim.notify("Please provide a pane number between 1 and 4.", vim.log.levels.ERROR)
-		return
-	end
-
-	local pane_id = vim.fn.getenv(string.format("%s_%d", window_name, n))
-	if not pane_id or pane_id == "" then
-		vim.notify("Pane ID not found. Make sure to run :StartGoo first.", vim.log.levels.ERROR)
-		return
-	end
-
-	-- Get the current window name
-	local current_window = exec_cmd("tmux display-message -p '#{window_name}'")
-	if not current_window then
-		vim.notify("Failed to retrieve current window name.", vim.log.levels.ERROR)
-		return
-	end
-	current_window = current_window:gsub("%s+", "") -- Trim whitespace
-
-	-- Prevent moving panes within the gooTabs window
-	if current_window == window_name then
-		vim.notify("Cannot summon panes within the 'gooTabs' window.", vim.log.levels.WARN)
-		return
-	end
-
-	-- Move all goo panes back to 'gooTabs' (except those already there)
-	local panes_moved_back = false
-	for i = 1, 4 do
-		local pid = vim.fn.getenv(string.format("%s_%d", window_name, i))
-		if pid and pid ~= "" then
-			-- Get the window name of the pane
-			local pane_window = get_pane_window(pid)
-			if pane_window and pane_window ~= window_name then
-				-- Move the pane back to 'gooTabs' without changing focus
-				local move_cmd = string.format("tmux move-pane -d -s %s -t " .. window_name .. "", pid)
-				local move_output = exec_cmd(move_cmd)
-				if move_output == nil then
-					vim.notify(string.format("Failed to move pane %s back to " .. window_name .. "'.", pid), vim.log.levels.ERROR)
-				else
-					-- vim.notify(string.format("Moved pane %s back to 'gooTabs'.", pid), vim.log.levels.INFO)
-					panes_moved_back = true
-				end
-			end
-		end
-	end
-
-	-- Reset the layout in 'gooTabs' if any panes were moved back
-	if panes_moved_back then
-		local layout_cmd = "tmux select-layout -t " .. window_name .. " even-horizontal"
-		exec_cmd(layout_cmd)
-		-- vim.notify("Reset 'gooTabs' layout to even-horizontal.", vim.log.levels.INFO)
-	end
-
-	-- Now, check if the desired pane is already in the current window
-	local pane_window = get_pane_window(pane_id)
-        if pane_window == current_window then
-                vim.notify(string.format("Pane %d is already in the current window.", n), vim.log.levels.INFO)
-                return
-        end
-
-        -- Configure vim-slime to send directly to the selected pane
-        set_slime_target(pane_id)
-
-        -- Bring the specified pane into the current window to the right without changing focus
-        local summon_cmd = string.format("tmux join-pane -h -d -s %s -t %s -l 33%%", pane_id, current_window)
-        os.execute(summon_cmd)
-        _G.goo_started = true
-        -- vim.notify(string.format("Summoned pane %d (%s) to window '%s' to the right.", n, pane_id, current_window), vim.log.levels.INFO)
+  warn_deprecation("summon_goo", "gootabs.summon_goo() is deprecated; use gootabs.select().")
+  return M.select(n, { window_name = window_name })
 end
 
 return M
-

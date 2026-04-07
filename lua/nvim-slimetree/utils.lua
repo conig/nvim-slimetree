@@ -1,32 +1,48 @@
 local M = {}
--- logical test of whether x is container in y
-function M.in_set(x, y)
-	if type(y) ~= "table" then
-    print(y)
-		error("Expected a table as the second argument, got " .. type(y))
-	end
-	-- If treating y as a set:
-	return y[x] == true
+local parser_tick_cache = {}
+
+function M.in_set(value, set)
+  return type(set) == "table" and set[value] == true
 end
 
-function M.append(x, y)
-    local result = {}
-
-    -- Add all entries from x to result
-    for k, v in pairs(x) do
-        if v == true then
-            result[k] = true
-        end
+function M.union_sets(a, b)
+  local out = {}
+  for k, v in pairs(a or {}) do
+    if v == true then
+      out[k] = true
     end
-
-    -- Add all entries from y to result
-    for k, v in pairs(y) do
-        if v == true then
-            result[k] = true
-        end
+  end
+  for k, v in pairs(b or {}) do
+    if v == true then
+      out[k] = true
     end
+  end
+  return out
+end
 
-    return result
+function M.notify(cfg, msg, level)
+  if cfg and cfg.notify and cfg.notify.silent then
+    return
+  end
+  vim.notify(msg, level or (cfg and cfg.notify and cfg.notify.level) or vim.log.levels.WARN)
+end
+
+function M.refresh_parser(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+  if not ok or not parser then
+    return false
+  end
+
+  local tick = vim.api.nvim_buf_get_changedtick(bufnr)
+  if parser_tick_cache[bufnr] == tick then
+    return true
+  end
+
+  parser:parse()
+  parser_tick_cache[bufnr] = tick
+
+  return true
 end
 
 return M

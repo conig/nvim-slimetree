@@ -1,103 +1,133 @@
 # nvim-slimetree
 
-> [!IMPORTANT]
-> This plugin is in infancy and I'm going to change a lot of things. So expect things to break.
+`nvim-slimetree` is a Tree-sitter-driven REPL send plugin for Neovim.
 
-nvim-slimetree has two main features:
+It has two features:
 
-1. Intelligent Treesitter based code exection in a REPL
-2. Management of multiple REPLs via tmux
+1. Deterministic chunk execution (`slimetree`)
+2. Optional tmux pane management (`gootabs`)
 
-The objective of nvim-slimetree is to allow chunks of complete code to be executed based on cursor position and the treesitter syntax tree.
-By doing so, users can swiftly jump through their codebase, without having to manually select whether lines or paragraphs of code should be executed.
+## Language Support
 
-## Code execution
+Built-in node specs are included for:
 
-I built this package to support my own workflow, which revolves around R. Accordingly, as far as I am aware the code execution will work perfectly for R. However, there is also some support for lua.
+- R (`r`, `rmd`, `qmd`, `quarto`)
+- Python (`python`)
+- Bash/shell (`bash`, `sh`, `zsh`, `ksh`)
 
-All languages can be supported, however it requires a list of acceptable node types to be assembled for each language.
+## Defaults
 
-This is something I plan to do, as I need it, so feel free to do a PR or fork the library to add support for your language.
+- tmux/gootabs is **off** by default.
+- REPL send auto-selects transport:
+  - native tmux async sender when tmux target config is present
+  - `vim-slime` fallback otherwise.
 
-## REPL management
+## Installation
 
-Something I miss from vscode is having multiple terminals which you can switch between.
-
-I have implemented a hacky tmux solution to achieve this. You must have tmux active in your terminal for this to work.
-
-The following keybindings are available to facilitate this.
-
-Execute Start goo to initiate the window "gooTabs"
-
-Then, to summon each of four terminals execute summon_goo(n), where n is the terminal you wish to retrieve.
-This will bring that terminal pane into your session, it will be returned to its origin when you summon another terminal.
-
-```{lua}
-
-local st = require("nvim-slimetree")
-
-vim.keymap.set("n", "<leader>gs", function()
-    st.gootabs.start_goo "clear && r"
-end, { desc = "Start goo", noremap = true, silent = true })
-
-vim.keymap.set("n", "<leader>g1", function()
-    st.gootabs.summon_goo(1)
-end, { desc = "Summon goo 1", noremap = true, silent = true })
-
-vim.keymap.set("n", "<leader>g2", function()
-    st.gootabs.summon_goo(2)
-end, { desc = "Summon goo 2", noremap = true, silent = true })
-
-vim.keymap.set("n", "<leader>g3", function()
-    st.gootabs.summon_goo(3)
-end, { desc = "Summon goo 3", noremap = true, silent = true })
-
-vim.keymap.set("n", "<leader>g4", function()
-    st.gootabs.summon_goo(4)
-end, { desc = "Summon goo 4", noremap = true, silent = true })
-```
-
-## Example installation and configuration
-
-```{lua}
-
+```lua
 return {
-{
+  {
     "conig/nvim-slimetree",
-    ft = { "r", "rmd", "quarto", "lua" },
-    dependencies = "jpalardy/vim-slime",
+    ft = { "r", "rmd", "qmd", "quarto", "python", "bash", "sh", "zsh", "ksh" },
+    dependencies = { "jpalardy/vim-slime" },
     config = function()
-      local st = require "nvim-slimetree"
+      local st = require("nvim-slimetree")
 
-      -- Keymaps for .slimetree
+      st.setup({
+        transport = {
+          backend = "auto",
+          async = true,
+        },
+        gootabs = {
+          enabled = false,
+        },
+      })
+
       vim.keymap.set("x", "<CR>", "<Plug>SlimeRegionSend", { remap = true, silent = true })
       vim.keymap.set("n", "<CR>", function()
-        st.slimetree.goo_move()
-      end, { desc = "Slime and move" })
+        st.slimetree.send_current()
+      end, { desc = "Send chunk and move" })
       vim.keymap.set("n", "<leader><CR>", function()
-        st.slimetree.goo_move(true)
-      end, { desc = "Slime and hold position", noremap = true })
+        st.slimetree.send_current({ hold_position = true })
+      end, { desc = "Send chunk and hold" })
       vim.keymap.set("n", "<C-c><C-c>", function()
-        st.slimetree.SlimeCurrentLine()
-      end, { desc = "Send current line to Slime" })
-
-      -- Keymaps for .gootabs
-      vim.keymap.set("n", "<leader>gs", function()
-        st.gootabs.start_goo "clear && r"
-      end, { desc = "Start goo", noremap = true, silent = true })
-      vim.keymap.set("n", "<leader>g1", function()
-        st.gootabs.summon_goo(1)
-      end, { desc = "Summon goo 1", noremap = true, silent = true })
-      vim.keymap.set("n", "<leader>g2", function()
-        st.gootabs.summon_goo(2)
-      end, { desc = "Summon goo 2", noremap = true, silent = true })
-      vim.keymap.set("n", "<leader>g3", function()
-        st.gootabs.summon_goo(3)
-      end, { desc = "Summon goo 3", noremap = true, silent = true })
-      vim.keymap.set("n", "<leader>g4", function()
-        st.gootabs.summon_goo(4)
-      end, { desc = "Summon goo 4", noremap = true, silent = true })
+        st.slimetree.send_line()
+      end, { desc = "Send current line" })
     end,
-  }}
-
+  },
+}
 ```
+
+## Optional gootabs (tmux)
+
+Enable explicitly:
+
+```lua
+local st = require("nvim-slimetree")
+
+st.setup({
+  gootabs = {
+    enabled = true,
+    layout = "grid4",
+    pane_commands = { "R", "python", "bash", "" },
+  },
+})
+
+vim.keymap.set("n", "<leader>gs", function()
+  st.gootabs.start()
+end)
+
+vim.keymap.set("n", "<leader>g1", function()
+  st.gootabs.select(1)
+end)
+```
+
+## Public API
+
+- `require("nvim-slimetree").setup(opts)`
+- `st.slimetree.send_current(opts?)`
+- `st.slimetree.send_line()`
+- `st.slimetree.transport_status()`
+- `st.slimetree.transport_restart()`
+- `st.gootabs.start(opts?)`
+- `st.gootabs.select(index, opts?)`
+- `st.gootabs.stop(opts?)`
+- `st.gootabs.status()`
+
+## Transport options
+
+```lua
+st.setup({
+  transport = {
+    backend = "auto", -- auto|tmux_native|slime
+    async = true,
+    mode = "control", -- currently handled by native sender implementation
+    max_queue = 256,
+    fallback_to_slime = true,
+    tmux = {
+      buffer_name = "slimetree_send",
+      cancel_copy_mode = true,
+      bracketed_paste = "auto", -- auto|true|false
+      append_newline = true,
+      enter_mode = "auto", -- auto|always|never
+    },
+  },
+})
+```
+
+## Deprecated (still shimmed)
+
+- `slimetree.goo_move`
+- `slimetree.SlimeCurrentLine`
+- `gootabs.start_goo`
+- `gootabs.summon_goo`
+- `gootabs.end_goo`
+
+## Tests
+
+```bash
+tests/scripts/bootstrap_parsers.sh
+nvim --headless -i NONE -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/spec { minimal_init = 'tests/minimal_init.lua' }" -c qa
+```
+
+`tests/scripts/bootstrap_parsers.sh` clones `nvim-treesitter` into `tests/pack/vendor/start/` on first run and installs the `python` and `bash` parsers into `tests/pack/vendor/parsers/`.
