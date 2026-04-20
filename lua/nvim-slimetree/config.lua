@@ -24,6 +24,10 @@ local defaults = {
     mode = "control",
     max_queue = 256,
     fallback_to_slime = true,
+    terminal = {
+      append_newline = true,
+      bracketed_paste = "auto",
+    },
     tmux = {
       buffer_name = "slimetree_send",
       cancel_copy_mode = true,
@@ -74,6 +78,7 @@ function M.normalize(user_opts)
 
   local valid_backend = {
     auto = true,
+    terminal = true,
     tmux_native = true,
     slime = true,
   }
@@ -100,6 +105,20 @@ function M.normalize(user_opts)
   end
 
   cfg.transport.fallback_to_slime = cfg.transport.fallback_to_slime ~= false
+
+  if type(cfg.transport.terminal) ~= "table" then
+    cfg.transport.terminal = deepcopy(defaults.transport.terminal)
+  end
+
+  local terminal_bracketed = cfg.transport.terminal.bracketed_paste
+  if terminal_bracketed ~= "auto" and type(terminal_bracketed) ~= "boolean" then
+    cfg.transport.terminal.bracketed_paste = "auto"
+  end
+  cfg.transport.terminal.append_newline = cfg.transport.terminal.append_newline ~= false
+
+  if type(cfg.transport.tmux) ~= "table" then
+    cfg.transport.tmux = deepcopy(defaults.transport.tmux)
+  end
 
   local valid_enter_mode = {
     auto = true,

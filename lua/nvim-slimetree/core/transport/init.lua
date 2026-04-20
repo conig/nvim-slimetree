@@ -1,8 +1,42 @@
 local slime = require("nvim-slimetree.core.transport.slime")
 local state = require("nvim-slimetree.state")
+local terminal = require("nvim-slimetree.core.transport.terminal")
 local tmux_native = require("nvim-slimetree.core.transport.tmux_native")
 
 local M = {}
+
+local function send_with_slime(text)
+  local out = slime.send(text, {
+    append_newline = true,
+  })
+  state.transport.backend = "slime"
+  state.transport.connected = out.ok
+  if out.ok then
+    state.transport.last_error = nil
+  else
+    state.transport.last_error = out.reason
+  end
+  return out
+end
+
+local function send_with_fallback(text, cfg, backend_name, result)
+  if result.ok or not cfg.transport.fallback_to_slime then
+    return result
+  end
+
+  local fallback = slime.send(text, { append_newline = true })
+  if fallback.ok then
+    state.transport.stats.fallback = (state.transport.stats.fallback or 0) + 1
+    state.transport.last_error = nil
+  end
+  fallback.fallback_from = backend_name
+  state.transport.backend = "slime"
+  state.transport.connected = fallback.ok
+  if not fallback.ok then
+    state.transport.last_error = fallback.reason
+  end
+  return fallback
+end
 
 function M.resolve_backend(cfg, bufnr)
   local transport_cfg = (cfg and cfg.transport) or state.config.transport
@@ -11,6 +45,9 @@ function M.resolve_backend(cfg, bufnr)
   if selected == "auto" then
     if tmux_native.can_send(bufnr) then
       return "tmux_native"
+    end
+    if terminal.can_send(bufnr) then
+      return "terminal"
     end
     return "slime"
   end
@@ -21,6 +58,14 @@ function M.resolve_backend(cfg, bufnr)
 
   if selected == "tmux_native" then
     return "tmux_native"
+  end
+
+  if selected == "terminal" and not terminal.can_send(bufnr) then
+    return "slime"
+  end
+
+  if selected == "terminal" then
+    return "terminal"
   end
 
   return "slime"
@@ -40,36 +85,28 @@ function M.send(text, opts)
       async = opts.async,
       transport_cfg = cfg.transport,
     })
-
-    if (not result.ok) and cfg.transport.fallback_to_slime then
-      local fallback = slime.send(text, { append_newline = true })
-      if fallback.ok then
-        state.transport.stats.fallback = (state.transport.stats.fallback or 0) + 1
-      end
-      fallback.fallback_from = "tmux_native"
-      state.transport.backend = "slime"
-      state.transport.connected = fallback.ok
-      return fallback
-    end
-
-    return result
+    return send_with_fallback(text, cfg, "tmux_native", result)
   end
 
-  local out = slime.send(text, {
-    append_newline = true,
-  })
-  state.transport.backend = "slime"
-  state.transport.connected = out.ok
-  if not out.ok then
-    state.transport.last_error = out.reason
+  if backend == "terminal" then
+    result = terminal.send(text, {
+      bufnr = bufnr,
+      transport_cfg = cfg.transport,
+    })
+    return send_with_fallback(text, cfg, "terminal", result)
   end
-  return out
+
+  return send_with_slime(text)
 end
 
 function M.status()
   local backend = M.resolve_backend(state.config, vim.api.nvim_get_current_buf())
   if backend == "tmux_native" then
     return tmux_native.status()
+  end
+
+  if backend == "terminal" then
+    return terminal.status()
   end
 
   return {
@@ -84,7 +121,19 @@ function M.status()
 end
 
 function M.restart()
-  return tmux_native.restart()
+  local backend = M.resolve_backend(state.config, vim.api.nvim_get_current_buf())
+  if backend == "tmux_native" then
+    return tmux_native.restart()
+  end
+  if backend == "terminal" then
+    return terminal.restart()
+  end
+  state.reset_transport()
+  return {
+    ok = true,
+    reason = "ok",
+    backend = "slime",
+  }
 end
 
 return M

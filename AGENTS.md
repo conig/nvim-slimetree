@@ -8,7 +8,7 @@ This document is the contributor and implementation spec for `nvim-slimetree`.
 
 The plugin has two independent domains:
 
-1. `slimetree`: choose executable chunk under/after cursor and send to configured transport (`tmux_native` or `vim-slime` fallback).
+1. `slimetree`: choose executable chunk under/after cursor and send to configured transport (`tmux_native`, managed `terminal`, or `vim-slime` fallback).
 2. `gootabs`: optional tmux pane/window orchestration for multi-REPL workflows.
 
 `slimetree` must work even when `gootabs` is disabled.
@@ -39,6 +39,7 @@ lua/
       cursor.lua
       transport/
         init.lua
+        terminal.lua
         tmux_native.lua
         slime.lua
   nodes/
@@ -73,11 +74,13 @@ Defines defaults and configuration normalization.
 Config keys:
 
 - `repl.require_gootabs` (default `false`)
-- `transport.backend` (`auto|tmux_native|slime`, default `auto`)
+- `transport.backend` (`auto|tmux_native|terminal|slime`, default `auto`)
 - `transport.async` (default `true`)
 - `transport.mode` (`control|exec`, default `control`)
 - `transport.max_queue` (default `256`)
 - `transport.fallback_to_slime` (default `true`)
+- `transport.terminal.append_newline` (default `true`)
+- `transport.terminal.bracketed_paste` (`auto|true|false`, default `auto`)
 - `transport.tmux.buffer_name` (default `"slimetree_send"`)
 - `transport.tmux.cancel_copy_mode` (default `true`)
 - `transport.tmux.bracketed_paste` (`auto|true|false`, default `auto`)
@@ -161,6 +164,14 @@ Compatibility shims:
 - `SlimeCurrentLine()` -> `send_line`
 
 `send_current` must return structured status and never assume tmux unless configured.
+
+Managed Neovim terminal targets are configured via:
+
+- `b:slimetree_terminal_config`
+- `g:slimetree_terminal_config`
+
+with `{ bufnr = <terminal_bufnr> }` or `{ jobid = <terminal_jobid> }`.
+When `slime_target` resolves to `neovim`, native terminal transport may also reuse `b:slime_config` / `g:slime_default_config`.
 
 ### `gootabs.lua`
 

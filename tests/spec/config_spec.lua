@@ -40,7 +40,19 @@ describe("config.normalize", function()
     assert.is_true(cfg.transport.async)
     assert.are.equal(256, cfg.transport.max_queue)
     assert.is_true(cfg.transport.fallback_to_slime)
+    assert.is_true(cfg.transport.terminal.append_newline)
+    assert.are.equal("auto", cfg.transport.terminal.bracketed_paste)
     assert.are.equal("slimetree_send", cfg.transport.tmux.buffer_name)
+  end)
+
+  it("accepts terminal as an explicit backend", function()
+    local cfg = config.normalize({
+      transport = {
+        backend = "terminal",
+      },
+    })
+
+    assert.are.equal("terminal", cfg.transport.backend)
   end)
 
   it("normalizes invalid transport fields to safe defaults", function()
@@ -49,6 +61,9 @@ describe("config.normalize", function()
         backend = "wat",
         mode = "bad",
         max_queue = -9,
+        terminal = {
+          bracketed_paste = "bad",
+        },
         tmux = {
           bracketed_paste = "bad",
           enter_mode = "bad",
@@ -60,6 +75,7 @@ describe("config.normalize", function()
     assert.are.equal("auto", cfg.transport.backend)
     assert.are.equal("control", cfg.transport.mode)
     assert.are.equal(1, cfg.transport.max_queue)
+    assert.are.equal("auto", cfg.transport.terminal.bracketed_paste)
     assert.are.equal("auto", cfg.transport.tmux.bracketed_paste)
     assert.are.equal("auto", cfg.transport.tmux.enter_mode)
     assert.are.equal("slimetree_send", cfg.transport.tmux.buffer_name)

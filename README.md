@@ -20,6 +20,7 @@ Built-in node specs are included for:
 - tmux/gootabs is **off** by default.
 - REPL send auto-selects transport:
   - native tmux async sender when tmux target config is present
+  - native Neovim terminal sender when a managed terminal target is present
   - `vim-slime` fallback otherwise.
 
 ## Installation
@@ -99,11 +100,15 @@ end)
 ```lua
 st.setup({
   transport = {
-    backend = "auto", -- auto|tmux_native|slime
+    backend = "auto", -- auto|tmux_native|terminal|slime
     async = true,
     mode = "control", -- currently handled by native sender implementation
     max_queue = 256,
     fallback_to_slime = true,
+    terminal = {
+      append_newline = true,
+      bracketed_paste = "auto", -- auto|true|false
+    },
     tmux = {
       buffer_name = "slimetree_send",
       cancel_copy_mode = true,
@@ -114,6 +119,28 @@ st.setup({
   },
 })
 ```
+
+## Managed Neovim terminal target
+
+`nvim-slimetree` can send directly to a managed Neovim terminal job without routing through `vim-slime`.
+
+Set a global or buffer-local target:
+
+```lua
+vim.g.slimetree_terminal_config = {
+  bufnr = term_bufnr, -- or jobid = terminal_jobid
+}
+
+require("nvim-slimetree").setup({
+  transport = {
+    backend = "auto",
+  },
+})
+```
+
+`auto` keeps native tmux first. Terminal send is only chosen when no tmux target is configured and a managed terminal target is available.
+
+For compatibility, the native terminal transport also reuses `vim-slime`'s Neovim target config when `slime_target` is `neovim`.
 
 ## Deprecated (still shimmed)
 
